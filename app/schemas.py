@@ -27,7 +27,7 @@ class SportType(StrEnum):
     OTHER = "other"
 
 
-class VenueStatus(StrEnum):
+class PropertyStatus(StrEnum):
     ACTIVE = "active"
     INACTIVE = "inactive"
     MAINTENANCE = "maintenance"
@@ -67,19 +67,19 @@ def _validate_working_hours(value: Any) -> WeeklyHours:
     return result
 
 
-class VenueImageBase(BaseModel):
+class PropertyImageBase(BaseModel):
     url: str = Field(..., max_length=500)
     is_thumbnail: bool = False
     order: int = Field(default=0, ge=0)
 
 
-class VenueImageCreate(VenueImageBase):
-    """Used when adding an image to a venue (venue_id comes from the path)."""
+class PropertyImageCreate(PropertyImageBase):
+    """Used when adding an image to a property (property_id comes from the path)."""
 
     pass
 
 
-class VenueImageUpdate(BaseModel):
+class PropertyImageUpdate(BaseModel):
     """Partial update — all fields optional."""
 
     url: str | None = Field(default=None, max_length=500)
@@ -87,32 +87,32 @@ class VenueImageUpdate(BaseModel):
     order: int | None = Field(default=None, ge=0)
 
 
-class VenueImageResponse(VenueImageBase):
+class PropertyImageResponse(PropertyImageBase):
     id: UUID
-    venue_id: UUID
+    property_id: UUID
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class VenueUnavailabilityBase(BaseModel):
+class PropertyUnavailabilityBase(BaseModel):
     start_datetime: datetime
     end_datetime: datetime
     reason: str | None = Field(default=None, max_length=255)
 
     @model_validator(mode="after")
-    def end_after_start(self) -> VenueUnavailabilityBase:
+    def end_after_start(self) -> PropertyUnavailabilityBase:
         if self.end_datetime <= self.start_datetime:
             raise ValueError("end_datetime must be after start_datetime")
         return self
 
 
-class VenueUnavailabilityCreate(VenueUnavailabilityBase):
-    """Used when blocking time for a venue (venue_id comes from the path)."""
+class PropertyUnavailabilityCreate(PropertyUnavailabilityBase):
+    """Used when blocking time for a property (property_id comes from the path)."""
 
     pass
 
 
-class VenueUnavailabilityUpdate(BaseModel):
+class PropertyUnavailabilityUpdate(BaseModel):
     """Partial update — all fields optional."""
 
     start_datetime: datetime | None = None
@@ -120,7 +120,7 @@ class VenueUnavailabilityUpdate(BaseModel):
     reason: str | None = Field(default=None, max_length=255)
 
     @model_validator(mode="after")
-    def end_after_start(self) -> VenueUnavailabilityUpdate:
+    def end_after_start(self) -> PropertyUnavailabilityUpdate:
         if (
             self.start_datetime
             and self.end_datetime
@@ -130,14 +130,14 @@ class VenueUnavailabilityUpdate(BaseModel):
         return self
 
 
-class VenueUnavailabilityResponse(VenueUnavailabilityBase):
+class PropertyUnavailabilityResponse(PropertyUnavailabilityBase):
     id: UUID
-    venue_id: UUID
+    property_id: UUID
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class VenueBase(BaseModel):
+class PropertyBase(BaseModel):
     # Core
     name: str = Field(..., min_length=2, max_length=255)
     description: str = Field(..., min_length=10)
@@ -191,9 +191,9 @@ class VenueBase(BaseModel):
         return _validate_working_hours(v)
 
 
-class VenueCreate(VenueBase):
+class PropertyCreate(PropertyBase):
     """
-    Payload for POST /venues.
+    Payload for POST /properties.
     owner_id is injected from the authenticated user — not accepted from the client.
     Status starts as PENDING_APPROVAL by default.
     """
@@ -201,9 +201,9 @@ class VenueCreate(VenueBase):
     pass
 
 
-class VenueUpdate(BaseModel):
+class PropertyUpdate(BaseModel):
     """
-    Partial update for PATCH /venues/{id}.
+    Partial update for PATCH /properties/{id}.
     Every field is optional; only provided fields are applied.
     """
 
@@ -244,18 +244,18 @@ class VenueUpdate(BaseModel):
         return _validate_working_hours(v)
 
 
-class VenueStatusUpdate(BaseModel):
-    """Used by admins for PATCH /venues/{id}/status."""
+class PropertyStatusUpdate(BaseModel):
+    """Used by admins for PATCH /properties/{id}/status."""
 
-    status: VenueStatus
+    status: PropertyStatus
 
 
-class VenueResponse(VenueBase):
-    """Full venue representation returned from any read endpoint."""
+class PropertyResponse(PropertyBase):
+    """Full property representation returned from any read endpoint."""
 
     id: UUID
     owner_id: UUID
-    status: VenueStatus
+    status: PropertyStatus
 
     # Computed / aggregate fields
     rating: Decimal
@@ -265,15 +265,15 @@ class VenueResponse(VenueBase):
     updated_at: datetime
 
     # Related
-    images: list[VenueImageResponse] = Field(default_factory=list)
-    unavailabilities: list[VenueUnavailabilityResponse] = Field(default_factory=list)
+    images: list[PropertyImageResponse] = Field(default_factory=list)
+    unavailabilities: list[PropertyUnavailabilityResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class VenueListItem(BaseModel):
+class PropertyListItem(BaseModel):
     """
-    Lightweight projection for GET /venues (list / search).
+    Lightweight projection for GET /properties (list / search).
     Omits heavy relations and bulk fields.
     """
 
@@ -281,7 +281,7 @@ class VenueListItem(BaseModel):
     name: str
     city: str
     sport_types: list[SportType]
-    status: VenueStatus
+    status: PropertyStatus
     price_per_hour: Decimal
     currency: str
     capacity: int
@@ -293,8 +293,8 @@ class VenueListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class VenueFilters(BaseModel):
-    """Bind to a FastAPI route via Depends(VenueFilters)."""
+class PropertyFilters(BaseModel):
+    """Bind to a FastAPI route via Depends(PropertyFilters)."""
 
     city: str | None = None
     sport_type: SportType | None = None
@@ -303,7 +303,7 @@ class VenueFilters(BaseModel):
     min_price: Decimal | None = Field(default=None, ge=0)
     max_price: Decimal | None = Field(default=None, ge=0)
     min_capacity: int | None = Field(default=None, ge=1)
-    status: VenueStatus | None = None
+    status: PropertyStatus | None = None
     owner_id: UUID | None = None
 
     # Pagination
@@ -311,7 +311,7 @@ class VenueFilters(BaseModel):
     page_size: int = Field(default=20, ge=1, le=100)
 
     @model_validator(mode="after")
-    def price_range_sane(self) -> VenueFilters:
+    def price_range_sane(self) -> PropertyFilters:
         if (
             self.min_price is not None
             and self.max_price is not None

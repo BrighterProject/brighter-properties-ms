@@ -1,20 +1,20 @@
-# ploshtadka-venues-ms
+# brighter-properties-ms
 
-Manages sports venues, images, and unavailability periods.
+Manages sports properties, images, and unavailability periods.
 
-**Port:** `8001` | **Prefix:** `/venues`
+**Port:** `8001` | **Prefix:** `/properties`
 
 ## Endpoints
 
 | Method | Path | Auth |
 |---|---|---|
-| `GET` | `/venues` | Public |
-| `GET` | `/venues/{id}` | Public |
-| `POST` | `/venues` | Owner scope |
-| `PATCH` | `/venues/{id}` | Owner / Admin |
-| `DELETE` | `/venues/{id}` | Owner / Admin |
-| `*` | `/venues/{id}/images` | Owner / Admin |
-| `*` | `/venues/{id}/unavailabilities` | Owner / Admin |
+| `GET` | `/properties` | Public |
+| `GET` | `/properties/{id}` | Public |
+| `POST` | `/properties` | Owner scope |
+| `PATCH` | `/properties/{id}` | Owner / Admin |
+| `DELETE` | `/properties/{id}` | Owner / Admin |
+| `*` | `/properties/{id}/images` | Owner / Admin |
+| `*` | `/properties/{id}/unavailabilities` | Owner / Admin |
 
 ## Running
 
@@ -33,5 +33,5 @@ uv run pytest
 ## Notes
 
 - Auth is delegated to Traefik — reads `X-User-Id`, `X-Username`, `X-User-Scopes` headers.
-- `GET /venues` and `GET /venues/{id}` carry `Cache-Control: public` headers (max-age 30s / 60s).
+- `GET /properties` and `GET /properties/{id}` carry `Cache-Control: public` headers (max-age 30s / 60s).
 - Tests mock the CRUD layer with `AsyncMock`; use `owner_client`/`admin_client`/`anon_app` fixtures.

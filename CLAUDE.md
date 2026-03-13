@@ -1,6 +1,6 @@
-# CLAUDE.md — ploshtadka-venues-ms
+# CLAUDE.md — brighter-properties-ms
 
-FastAPI microservice for managing sports venues (part of the PloshtadkaBG platform).
+FastAPI microservice for managing sports properties (part of the BrighterProject platform).
 
 ## Package management
 
@@ -46,18 +46,18 @@ The service is designed to run behind Traefik. Direct calls without those header
 ```
 app/
   settings.py          # DB_URL, USERS_MS_URL (env vars with defaults)
-  models.py            # Tortoise ORM models (Venue, VenueImage, VenueUnavailability)
+  models.py            # Tortoise ORM models (Property, PropertyImage, PropertyUnavailability)
   schemas.py           # Pydantic schemas — enums mirrored from models.py
   crud.py              # Data access layer, extends ms_core.CRUD
   deps.py              # Auth dependencies and pre-built scope checkers
-  scopes.py            # VenueScope StrEnum + VENUE_SCOPE_DESCRIPTIONS
+  scopes.py            # PropertyScope StrEnum + PROPERTY_SCOPE_DESCRIPTIONS
   routers/
-    venue.py           # /venues CRUD
-    images.py          # /venues/{id}/images
-    unavail.py         # /venues/{id}/unavailabilities
+    property.py           # /properties CRUD
+    images.py          # /properties/{id}/images
+    unavail.py         # /properties/{id}/unavailabilities
 tests/
   conftest.py          # Fixtures: owner_client, admin_client, anon_app, client_factory
-  factories.py         # make_user(), make_admin(), venue_create_payload(), etc.
+  factories.py         # make_user(), make_admin(), property_create_payload(), etc.
   test_*.py            # One file per router + edge cases + schemas + scopes
 ```
 
@@ -72,16 +72,16 @@ New router files placed in `app/routers/` are picked up automatically by `setup_
 
 ## Key formats
 
-**VenueStatus** enum: `pending` | `active` | `rejected` | `suspended`
+**PropertyStatus** enum: `pending` | `active` | `rejected` | `suspended`
 
-**`working_hours`** JSON (stored on Venue): weekday keys `"0"`–`"6"` (0=Monday), value `{open: "HH:MM", close: "HH:MM"}` or `null` for closed days.
+**`working_hours`** JSON (stored on Property): weekday keys `"0"`–`"6"` (0=Monday), value `{open: "HH:MM", close: "HH:MM"}` or `null` for closed days.
 
 **`sport_types`**: JSON list of strings (e.g. `["football", "tennis"]`).
 
 ## Cache headers
 
-`GET /venues/` — `Cache-Control: public, max-age=30`
-`GET /venues/{id}` — `Cache-Control: public, max-age=60`
+`GET /properties/` — `Cache-Control: public, max-age=30`
+`GET /properties/{id}` — `Cache-Control: public, max-age=60`
 
 Set in the router. Downstream caches (Traefik/browser) serve stale data within the TTL — keep this in mind when testing updates.
 
@@ -100,7 +100,7 @@ Use the pre-built dependencies from `app/deps.py`:
 
 ```python
 # Owner only
-Depends(can_write_venue)
+Depends(can_write_property)
 
 # Owner or admin (preferred for mutating operations)
 Depends(can_write_or_admin)
@@ -109,12 +109,12 @@ Depends(can_write_or_admin)
 Depends(can_admin_write)
 
 # Custom scopes
-Depends(require_scopes(VenueScope.READ, VenueScope.ME))
+Depends(require_scopes(PropertyScope.READ, PropertyScope.ME))
 ```
 
-`_owner_or_admin()` passes if the user has the owner-level scope OR the admin-level scope OR the top-level `admin:venues` scope.
+`_owner_or_admin()` passes if the user has the owner-level scope OR the admin-level scope OR the top-level `admin:properties` scope.
 
-`is_admin` on `CurrentUser` checks for `admin:scopes` (the global admin scope, not venue-specific).
+`is_admin` on `CurrentUser` checks for `admin:scopes` (the global admin scope, not property-specific).
 
 ## Testing conventions
 
@@ -127,11 +127,11 @@ Depends(require_scopes(VenueScope.READ, VenueScope.ME))
 ```python
 from unittest.mock import AsyncMock, patch
 
-def test_create_venue(owner_client):
-    payload = venue_create_payload()
-    with patch("app.routers.venue.crud.create_venue", new_callable=AsyncMock) as mock:
-        mock.return_value = venue_response()
-        resp = owner_client.post("/venues", json=payload)
+def test_create_property(owner_client):
+    payload = property_create_payload()
+    with patch("app.routers.property.crud.create_property", new_callable=AsyncMock) as mock:
+        mock.return_value = property_response()
+        resp = owner_client.post("/properties", json=payload)
     assert resp.status_code == 201
 ```
 

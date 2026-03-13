@@ -1,4 +1,4 @@
-from app.scopes import VenueScope
+from app.scopes import PropertyScope
 
 from .factories import make_admin, make_user
 
@@ -13,5 +13,5 @@ class TestCurrentUserScopes:
         assert user.is_admin is False
 
     def test_scoped_user_missing_admin_scope(self):
-        user = make_user(scopes=[VenueScope.READ, VenueScope.WRITE])
-        assert VenueScope.ADMIN_WRITE not in user.scopes
+        user = make_user(scopes=[PropertyScope.READ, PropertyScope.WRITE])
+        assert PropertyScope.ADMIN_WRITE not in user.scopes

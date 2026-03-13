@@ -13,13 +13,13 @@ from app.deps import (
     can_admin_write,
     can_delete_or_admin,
     can_images_or_admin,
-    can_read_own_venues,
-    can_read_venues,
+    can_read_own_properties,
+    can_read_properties,
     can_schedule_or_admin,
     can_write_or_admin,
     get_current_user,
 )
-from app.routers.venue import router
+from app.routers.property import router
 
 from .factories import make_admin, make_user
 
@@ -41,8 +41,8 @@ def build_app(current_user) -> FastAPI:
         return current_user
 
     for dep in (
-        can_read_venues,
-        can_read_own_venues,
+        can_read_properties,
+        can_read_own_properties,
         can_write_or_admin,
         can_delete_or_admin,
         can_images_or_admin,
@@ -62,7 +62,7 @@ def build_app(current_user) -> FastAPI:
 
 @pytest.fixture()
 def owner_client():
-    """TestClient authenticated as a regular venue owner."""
+    """TestClient authenticated as a regular property owner."""
     return TestClient(build_app(make_user()), raise_server_exceptions=True)
 
 
@@ -90,8 +90,8 @@ def client_factory():
 
     Usage in a test:
         def test_something(client_factory):
-            client = client_factory(make_user(scopes=[VenueScope.READ]))
-            resp = client.get("/venues")
+            client = client_factory(make_user(scopes=[PropertyScope.READ]))
+            resp = client.get("/properties")
     """
 
     def _make(current_user) -> TestClient:

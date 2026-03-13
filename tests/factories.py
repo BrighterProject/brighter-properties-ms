@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from app.deps import CurrentUser
-from app.scopes import VenueScope
+from app.scopes import PropertyScope
 
 # ---------------------------------------------------------------------------
 # Stable IDs — use these when a specific, repeatable UUID is needed.
@@ -20,7 +20,7 @@ OWNER_ID: UUID = uuid4()
 OTHER_USER_ID: UUID = uuid4()
 ADMIN_ID: UUID = uuid4()
 
-VENUE_ID: UUID = uuid4()
+PROPERTY_ID: UUID = uuid4()
 IMAGE_ID: UUID = uuid4()
 UNAVAIL_ID: UUID = uuid4()
 
@@ -38,15 +38,15 @@ def make_user(
     scopes: list[str] | None = None,
     is_active: bool = True,
 ) -> CurrentUser:
-    """Regular venue owner with all owner-level scopes by default."""
+    """Regular property owner with all owner-level scopes by default."""
     if scopes is None:
         scopes = [
-            VenueScope.READ,
-            VenueScope.ME,
-            VenueScope.WRITE,
-            VenueScope.DELETE,
-            VenueScope.IMAGES,
-            VenueScope.SCHEDULE,
+            PropertyScope.READ,
+            PropertyScope.ME,
+            PropertyScope.WRITE,
+            PropertyScope.DELETE,
+            PropertyScope.IMAGES,
+            PropertyScope.SCHEDULE,
         ]
     return CurrentUser(
         id=user_id,
@@ -56,16 +56,16 @@ def make_user(
 
 
 def make_admin() -> CurrentUser:
-    """Admin user with all admin:venues:* scopes."""
+    """Admin user with all admin:properties:* scopes."""
     return CurrentUser(
         id=ADMIN_ID,
         username="admin",
         scopes=[
-            VenueScope.READ,
+            PropertyScope.READ,
             "admin:scopes",
-            VenueScope.ADMIN_READ,
-            VenueScope.ADMIN_WRITE,
-            VenueScope.ADMIN_DELETE,
+            PropertyScope.ADMIN_READ,
+            PropertyScope.ADMIN_WRITE,
+            PropertyScope.ADMIN_DELETE,
         ],
     )
 
@@ -78,12 +78,12 @@ def make_user_without_scopes(*scopes_to_remove: str) -> CurrentUser:
     """Owner with specific scopes stripped — useful for 403 tests."""
     default = set(
         [
-            VenueScope.READ,
-            VenueScope.ME,
-            VenueScope.WRITE,
-            VenueScope.DELETE,
-            VenueScope.IMAGES,
-            VenueScope.SCHEDULE,
+            PropertyScope.READ,
+            PropertyScope.ME,
+            PropertyScope.WRITE,
+            PropertyScope.DELETE,
+            PropertyScope.IMAGES,
+            PropertyScope.SCHEDULE,
         ]
     )
     return make_user(scopes=list({str(el) for el in default} - set(scopes_to_remove)))
@@ -96,9 +96,9 @@ def make_user_without_scopes(*scopes_to_remove: str) -> CurrentUser:
 # ---------------------------------------------------------------------------
 
 
-def venue_list_item(**overrides) -> dict:
+def property_list_item(**overrides) -> dict:
     base = dict(
-        id=str(VENUE_ID),
+        id=str(PROPERTY_ID),
         name="Test Court",
         city="Sofia",
         sport_types=["tennis"],
@@ -114,9 +114,9 @@ def venue_list_item(**overrides) -> dict:
     return {**base, **overrides}
 
 
-def venue_response(**overrides) -> dict:
+def property_response(**overrides) -> dict:
     base = dict(
-        id=str(VENUE_ID),
+        id=str(PROPERTY_ID),
         owner_id=str(OWNER_ID),
         name="Test Court",
         description="A great tennis court for everyone.",
@@ -149,7 +149,7 @@ def venue_response(**overrides) -> dict:
 def image_response(**overrides) -> dict:
     base = dict(
         id=str(IMAGE_ID),
-        venue_id=str(VENUE_ID),
+        property_id=str(PROPERTY_ID),
         url="https://example.com/img.jpg",
         is_thumbnail=False,
         order=0,
@@ -160,7 +160,7 @@ def image_response(**overrides) -> dict:
 def unavail_response(**overrides) -> dict:
     base = dict(
         id=str(UNAVAIL_ID),
-        venue_id=str(VENUE_ID),
+        property_id=str(PROPERTY_ID),
         start_datetime=NOW.isoformat(),
         end_datetime=LATER.isoformat(),
         reason="Maintenance",
@@ -173,7 +173,7 @@ def unavail_response(**overrides) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def venue_create_payload(**overrides) -> dict:
+def property_create_payload(**overrides) -> dict:
     base = dict(
         name="Tennis Club Sofia",
         description="A great place for tennis lovers.",

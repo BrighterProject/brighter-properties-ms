@@ -8,7 +8,7 @@ from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 from app import settings
-from app.scopes import VENUE_SCOPE_DESCRIPTIONS, VenueScope
+from app.scopes import PROPERTY_SCOPE_DESCRIPTIONS, PropertyScope
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl=f"{settings.users_ms_url}/auth/token",
@@ -16,7 +16,7 @@ oauth2_scheme = OAuth2PasswordBearer(
         "users:read": "Read users data.",
         "users:me": "Read current user profile.",
         "admin:scopes": "Manage user scopes.",
-        **VENUE_SCOPE_DESCRIPTIONS,
+        **PROPERTY_SCOPE_DESCRIPTIONS,
     },
 )
 
@@ -94,25 +94,25 @@ async def require_admin(
     return current_user
 
 
-can_read_venues = require_scopes(VenueScope.READ)
-can_read_own_venues = require_scopes(VenueScope.ME)
-can_write_venue = require_scopes(VenueScope.WRITE)
-can_delete_venue = require_scopes(VenueScope.DELETE)
-can_manage_images = require_scopes(VenueScope.IMAGES)
-can_manage_schedule = require_scopes(VenueScope.SCHEDULE)
-can_admin_read = require_scopes(VenueScope.ADMIN_READ)
+can_read_properties = require_scopes(PropertyScope.READ)
+can_read_own_properties = require_scopes(PropertyScope.ME)
+can_write_property = require_scopes(PropertyScope.WRITE)
+can_delete_property = require_scopes(PropertyScope.DELETE)
+can_manage_images = require_scopes(PropertyScope.IMAGES)
+can_manage_schedule = require_scopes(PropertyScope.SCHEDULE)
+can_admin_read = require_scopes(PropertyScope.ADMIN_READ)
 can_admin_write = require_scopes(
-    VenueScope.ADMIN, VenueScope.ADMIN_READ, VenueScope.ADMIN_WRITE
+    PropertyScope.ADMIN, PropertyScope.ADMIN_READ, PropertyScope.ADMIN_WRITE
 )
 can_admin_delete = require_scopes(
-    VenueScope.ADMIN,
-    VenueScope.ADMIN_READ,
-    VenueScope.ADMIN_WRITE,
-    VenueScope.ADMIN_DELETE,
+    PropertyScope.ADMIN,
+    PropertyScope.ADMIN_READ,
+    PropertyScope.ADMIN_WRITE,
+    PropertyScope.ADMIN_DELETE,
 )
 
 
-def _owner_or_admin(owner_scope: VenueScope, admin_scope: VenueScope):
+def _owner_or_admin(owner_scope: PropertyScope, admin_scope: PropertyScope):
     """
     Returns a dependency that passes if the user has EITHER:
       - the owner-level scope, OR
@@ -125,7 +125,7 @@ def _owner_or_admin(owner_scope: VenueScope, admin_scope: VenueScope):
     ) -> CurrentUser:
         has_owner = owner_scope in current_user.scopes
         has_specific_admin = admin_scope in current_user.scopes
-        has_admin = VenueScope.ADMIN in current_user.scopes
+        has_admin = PropertyScope.ADMIN in current_user.scopes
 
         if not (has_owner or has_specific_admin or has_admin):
             from fastapi import HTTPException, status
@@ -133,7 +133,7 @@ def _owner_or_admin(owner_scope: VenueScope, admin_scope: VenueScope):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
-                    f"Requires '{owner_scope}' (for your own venues) "
+                    f"Requires '{owner_scope}' (for your own properties) "
                     f"or '{admin_scope}' (admin)."
                 ),
             )
@@ -142,7 +142,7 @@ def _owner_or_admin(owner_scope: VenueScope, admin_scope: VenueScope):
     return _dep
 
 
-can_write_or_admin = _owner_or_admin(VenueScope.WRITE, VenueScope.ADMIN_WRITE)
-can_delete_or_admin = _owner_or_admin(VenueScope.DELETE, VenueScope.ADMIN_DELETE)
-can_images_or_admin = _owner_or_admin(VenueScope.IMAGES, VenueScope.ADMIN_WRITE)
-can_schedule_or_admin = _owner_or_admin(VenueScope.SCHEDULE, VenueScope.ADMIN_WRITE)
+can_write_or_admin = _owner_or_admin(PropertyScope.WRITE, PropertyScope.ADMIN_WRITE)
+can_delete_or_admin = _owner_or_admin(PropertyScope.DELETE, PropertyScope.ADMIN_DELETE)
+can_images_or_admin = _owner_or_admin(PropertyScope.IMAGES, PropertyScope.ADMIN_WRITE)
+can_schedule_or_admin = _owner_or_admin(PropertyScope.SCHEDULE, PropertyScope.ADMIN_WRITE)

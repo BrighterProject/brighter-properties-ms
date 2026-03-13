@@ -5,17 +5,17 @@ from pydantic import ValidationError
 
 from app.schemas import (
     SportType,
-    VenueCreate,
-    VenueFilters,
-    VenueUnavailabilityCreate,
+    PropertyCreate,
+    PropertyFilters,
+    PropertyUnavailabilityCreate,
 )
 
 from .factories import LATER, NOW
 
 
-class TestVenueCreateSchema:
+class TestPropertyCreateSchema:
     def test_valid_payload(self):
-        data = VenueCreate(
+        data = PropertyCreate(
             name="Tennis Club",
             description="A wonderful tennis club in the city centre.",
             address="1 Sports Ave",
@@ -27,7 +27,7 @@ class TestVenueCreateSchema:
         assert data.capacity == 1
 
     def test_currency_uppercased(self):
-        data = VenueCreate(
+        data = PropertyCreate(
             name="Club",
             description="Long enough description here.",
             address="Addr",
@@ -38,7 +38,7 @@ class TestVenueCreateSchema:
         assert data.currency == "EUR"
 
     def test_sport_types_deduplicated(self):
-        data = VenueCreate(
+        data = PropertyCreate(
             name="Multi-sport",
             description="Long enough description here.",
             address="Addr",
@@ -50,7 +50,7 @@ class TestVenueCreateSchema:
 
     def test_name_too_short_raises(self):
         with pytest.raises(ValidationError):
-            VenueCreate(
+            PropertyCreate(
                 name="X",
                 description="Fine description.",
                 address="Addr",
@@ -60,7 +60,7 @@ class TestVenueCreateSchema:
 
     def test_negative_price_raises(self):
         with pytest.raises(ValidationError):
-            VenueCreate(
+            PropertyCreate(
                 name="Club",
                 description="Fine description.",
                 address="Addr",
@@ -70,7 +70,7 @@ class TestVenueCreateSchema:
 
     def test_capacity_zero_raises(self):
         with pytest.raises(ValidationError):
-            VenueCreate(
+            PropertyCreate(
                 name="Club",
                 description="Fine description.",
                 address="Addr",
@@ -82,7 +82,7 @@ class TestVenueCreateSchema:
 
 class TestWorkingHoursSchema:
     def test_valid_working_hours(self):
-        data = VenueCreate(
+        data = PropertyCreate(
             name="Morning Club",
             description="Opens early every day of the week.",
             address="Addr",
@@ -98,7 +98,7 @@ class TestWorkingHoursSchema:
 
     def test_invalid_day_key_raises(self):
         with pytest.raises(Exception, match="invalid day key"):
-            VenueCreate(
+            PropertyCreate(
                 name="Morning Club",
                 description="Opens early every day of the week.",
                 address="Addr",
@@ -109,7 +109,7 @@ class TestWorkingHoursSchema:
 
     def test_close_before_open_raises(self):
         with pytest.raises(ValidationError):
-            VenueCreate(
+            PropertyCreate(
                 name="Morning Club",
                 description="Opens early every day of the week.",
                 address="Addr",
@@ -119,32 +119,32 @@ class TestWorkingHoursSchema:
             )
 
 
-class TestVenueFiltersSchema:
+class TestPropertyFiltersSchema:
     def test_price_range_inversion_raises(self):
         with pytest.raises(Exception, match="min_price"):
-            VenueFilters(min_price=Decimal("100"), max_price=Decimal("10"))
+            PropertyFilters(min_price=Decimal("100"), max_price=Decimal("10"))
 
     def test_defaults(self):
-        f = VenueFilters()
+        f = PropertyFilters()
         assert f.page == 1
         assert f.page_size == 20
         assert f.status is None
 
     def test_page_size_capped(self):
         with pytest.raises(ValidationError):
-            VenueFilters(page_size=999)
+            PropertyFilters(page_size=999)
 
 
 class TestUnavailabilitySchema:
     def test_end_before_start_raises(self):
         with pytest.raises(Exception, match="end_datetime"):
-            VenueUnavailabilityCreate(
+            PropertyUnavailabilityCreate(
                 start_datetime=LATER,
                 end_datetime=NOW,
             )
 
     def test_valid_window(self):
-        obj = VenueUnavailabilityCreate(
+        obj = PropertyUnavailabilityCreate(
             start_datetime=NOW,
             end_datetime=LATER,
             reason="Holiday",

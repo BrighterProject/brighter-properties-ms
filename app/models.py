@@ -15,20 +15,20 @@ class SportType(StrEnum):
     OTHER = "other"
 
 
-class VenueStatus(StrEnum):
+class PropertyStatus(StrEnum):
     ACTIVE = "active"
     INACTIVE = "inactive"
     MAINTENANCE = "maintenance"
     PENDING_APPROVAL = "pending_approval"
 
 
-class Venue(Model):
+class Property(Model):
     id = fields.UUIDField(primary_key=True)
 
     name = fields.CharField(max_length=255)
     description = fields.TextField()
     sport_types = fields.JSONField(default=list)  # List[SportType]
-    status = fields.CharEnumField(VenueStatus, default=VenueStatus.PENDING_APPROVAL)
+    status = fields.CharEnumField(PropertyStatus, default=PropertyStatus.PENDING_APPROVAL)
 
     owner_id = fields.UUIDField()
 
@@ -67,11 +67,11 @@ class Venue(Model):
 
     updated_at = fields.DatetimeField(auto_now=True)
 
-    images: fields.ReverseRelation["VenueImage"]
-    unavailabilities: fields.ReverseRelation["VenueUnavailability"]
+    images: fields.ReverseRelation["PropertyImage"]
+    unavailabilities: fields.ReverseRelation["PropertyUnavailability"]
 
     class Meta:  # type: ignore
-        table = "venues"
+        table = "properties"
         ordering = ["-created_at"]
 
     def __str__(self):
@@ -81,30 +81,30 @@ class Venue(Model):
         exclude = ["owner__password_hash"]
 
 
-class VenueImage(Model):
+class PropertyImage(Model):
     id = fields.UUIDField(primary_key=True)
-    venue = fields.ForeignKeyField(
-        "models.Venue", related_name="images", on_delete=fields.CASCADE
+    property = fields.ForeignKeyField(
+        "models.Property", related_name="images", on_delete=fields.CASCADE
     )
     url = fields.CharField(max_length=500)
     is_thumbnail = fields.BooleanField(default=False)
     order = fields.IntField(default=0)
 
     class Meta:  # type: ignore
-        table = "venue_images"
+        table = "property_images"
         ordering = ["order"]
 
 
-class VenueUnavailability(Model):
+class PropertyUnavailability(Model):
     """maintenance, personal reasons etc."""
 
     id = fields.UUIDField(primary_key=True)
-    venue = fields.ForeignKeyField(
-        "models.Venue", related_name="unavailabilities", on_delete=fields.CASCADE
+    property = fields.ForeignKeyField(
+        "models.Property", related_name="unavailabilities", on_delete=fields.CASCADE
     )
     start_datetime = fields.DatetimeField()
     end_datetime = fields.DatetimeField()
     reason = fields.CharField(max_length=255, null=True)
 
     class Meta:  # type: ignore
-        table = "venue_unavailabilities"
+        table = "property_unavailabilities"
