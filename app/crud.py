@@ -5,12 +5,12 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from ms_core import CRUD
-from tortoise.exceptions import DoesNotExist
+from tortoise.exceptions import DoesNotExist, IntegrityError
 
 from app.deps import CurrentUser
 from app.scopes import PropertyScope
 
-from .models import Property, PropertyImage, PropertyUnavailability
+from .models import Property, PropertyImage, PropertyTranslation, PropertyUnavailability
 from .schemas import (
     PropertyCreate,
     PropertyFilters,
@@ -25,14 +25,35 @@ from .schemas import (
     PropertyUnavailabilityResponse,
     PropertyUnavailabilityUpdate,
     PropertyUpdate,
+    TranslationCreate,
+    TranslationResponse,
+    TranslationUpdate,
 )
+
+DEFAULT_LOCALE = "bg"
+FALLBACK_NAME = "Untitled"
+
+
+def _resolve_name(translations, locale: str) -> str:
+    """Pick name from translations for the given locale, falling back to bg, then first."""
+    by_locale = {t.locale: t for t in translations}
+    tr = by_locale.get(locale) or by_locale.get(DEFAULT_LOCALE)
+    if tr:
+        return tr.name
+    if by_locale:
+        return next(iter(by_locale.values())).name
+    return FALLBACK_NAME
+
+
+# ---------------------------------------------------------------------------
+# Images CRUD (unchanged)
+# ---------------------------------------------------------------------------
 
 
 class PropertyImageCRUD(CRUD[PropertyImage, PropertyImageResponse]):  # type: ignore
     async def create_for_property(
         self, property_id: UUID, payload: PropertyImageCreate
     ) -> PropertyImageResponse:
-        # If this is marked as thumbnail, demote any existing thumbnails first.
         if payload.is_thumbnail:
             await PropertyImage.filter(property_id=property_id, is_thumbnail=True).update(
                 is_thumbnail=False
@@ -74,12 +95,16 @@ class PropertyImageCRUD(CRUD[PropertyImage, PropertyImageResponse]):  # type: ig
     async def reorder(
         self, property_id: UUID, ordered_ids: list[UUID]
     ) -> list[PropertyImageResponse]:
-        """Accept an ordered list of image IDs and persist their positions."""
         for position, image_id in enumerate(ordered_ids):
             await PropertyImage.filter(id=image_id, property_id=property_id).update(
                 order=position
             )
         return await self.list_for_property(property_id)
+
+
+# ---------------------------------------------------------------------------
+# Unavailabilities CRUD (unchanged)
+# ---------------------------------------------------------------------------
 
 
 class PropertyUnavailabilityCRUD(CRUD[PropertyUnavailability, PropertyUnavailabilityResponse]):  # type: ignore
@@ -120,13 +145,76 @@ class PropertyUnavailabilityCRUD(CRUD[PropertyUnavailability, PropertyUnavailabi
         ]
 
 
-class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
-    async def create_property(self, payload: PropertyCreate, owner_id: UUID) -> PropertyResponse:
-        inst = await Property.create(
-            owner_id=owner_id,
-            **payload.model_dump(),
+# ---------------------------------------------------------------------------
+# Translations CRUD
+# ---------------------------------------------------------------------------
+
+
+class PropertyTranslationCRUD(CRUD[PropertyTranslation, TranslationResponse]):  # type: ignore
+    async def create_for_property(
+        self, property_id: UUID, payload: TranslationCreate
+    ) -> TranslationResponse:
+        try:
+            inst = await PropertyTranslation.create(
+                property_id=property_id,
+                **payload.model_dump(),
+            )
+        except IntegrityError:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Translation for locale '{payload.locale}' already exists",
+            )
+        return TranslationResponse.model_validate(inst, from_attributes=True)
+
+    async def update(
+        self,
+        property_id: UUID,
+        locale: str,
+        payload: TranslationUpdate,
+    ) -> TranslationResponse | None:
+        inst = await PropertyTranslation.get_or_none(
+            property_id=property_id, locale=locale
         )
-        await inst.fetch_related("images", "unavailabilities")
+        if not inst:
+            return None
+
+        await inst.update_from_dict(payload.model_dump(exclude_none=True)).save()
+        return TranslationResponse.model_validate(inst, from_attributes=True)
+
+    async def delete(self, property_id: UUID, locale: str) -> bool:
+        count = await PropertyTranslation.filter(
+            property_id=property_id, locale=locale
+        ).delete()
+        return count > 0
+
+    async def list_for_property(self, property_id: UUID) -> list[TranslationResponse]:
+        items = await PropertyTranslation.filter(property_id=property_id).order_by("locale")
+        return [
+            TranslationResponse.model_validate(item, from_attributes=True)
+            for item in items
+        ]
+
+
+# ---------------------------------------------------------------------------
+# Property CRUD
+# ---------------------------------------------------------------------------
+
+PREFETCH = ("images", "unavailabilities", "translations")
+
+
+class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
+    async def create_property(
+        self, payload: PropertyCreate, owner_id: UUID
+    ) -> PropertyResponse:
+        translations_data = payload.translations
+        property_data = payload.model_dump(exclude={"translations"})
+
+        inst = await Property.create(owner_id=owner_id, **property_data)
+
+        for tr in translations_data:
+            await PropertyTranslation.create(property_id=inst.id, **tr.model_dump())
+
+        await inst.fetch_related(*PREFETCH)
         return PropertyResponse.model_validate(inst, from_attributes=True)
 
     async def update_property(
@@ -137,33 +225,29 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             return None
 
         await inst.update_from_dict(payload.model_dump(exclude_none=True)).save()
-        await inst.fetch_related("images", "unavailabilities")
+        await inst.fetch_related(*PREFETCH)
         return PropertyResponse.model_validate(inst, from_attributes=True)
 
     async def update_status(
         self, property_id: UUID, payload: PropertyStatusUpdate
     ) -> PropertyResponse | None:
-        """Admin-only — no ownership check."""
         inst = await Property.get_or_none(id=property_id)
         if not inst:
             return None
 
         inst.status = payload.status  # type: ignore
         await inst.save(update_fields=["status"])
-        await inst.fetch_related("images", "unavailabilities")
+        await inst.fetch_related(*PREFETCH)
         return PropertyResponse.model_validate(inst, from_attributes=True)
 
     async def delete_property(self, property_id: UUID, owner_id: UUID) -> bool:
-        """Owners can only delete their own properties."""
         return await self.delete_by(id=property_id, owner_id=owner_id)
 
     async def admin_delete_property(self, property_id: UUID) -> bool:
         return await self.delete_by(id=property_id)
 
     async def get_property(self, property_id: UUID) -> PropertyResponse | None:
-        inst = await Property.get_or_none(id=property_id).prefetch_related(
-            "images", "unavailabilities"
-        )
+        inst = await Property.get_or_none(id=property_id).prefetch_related(*PREFETCH)
 
         if not inst:
             return None
@@ -175,14 +259,18 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
     ) -> PropertyResponse | None:
         try:
             inst = await Property.get(id=property_id, owner_id=owner_id).prefetch_related(
-                "images", "unavailabilities"
+                *PREFETCH
             )
         except DoesNotExist:
             return None
         return PropertyResponse.model_validate(inst, from_attributes=True)
 
-    async def get_properties_by_ids(self, ids: list[UUID]) -> list[PropertyListItem]:
-        properties = await Property.filter(id__in=ids).prefetch_related("images")
+    async def get_properties_by_ids(
+        self, ids: list[UUID], locale: str = DEFAULT_LOCALE
+    ) -> list[PropertyListItem]:
+        properties = await Property.filter(id__in=ids).prefetch_related(
+            "images", "translations"
+        )
         results: list[PropertyListItem] = []
         for v in properties:
             thumbnail = next(
@@ -192,14 +280,14 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             results.append(
                 PropertyListItem(
                     id=v.id,
-                    name=v.name,
+                    name=_resolve_name(v.translations, locale),  # type: ignore[union-attr]
                     city=v.city,
-                    sport_types=v.sport_types,
+                    property_type=v.property_type,
                     status=PropertyStatus(v.status),
-                    price_per_hour=v.price_per_hour,
+                    price_per_night=v.price_per_night,
                     currency=v.currency,
-                    capacity=v.capacity,
-                    is_indoor=v.is_indoor,
+                    max_guests=v.max_guests,
+                    bedrooms=v.bedrooms,
                     rating=v.rating,
                     total_reviews=v.total_reviews,
                     thumbnail=thumbnail,
@@ -207,34 +295,41 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             )
         return results
 
-    async def list_properties(self, filters: PropertyFilters) -> list[PropertyListItem]:
+    async def list_properties(
+        self, filters: PropertyFilters, locale: str = DEFAULT_LOCALE
+    ) -> list[PropertyListItem]:
         qs = Property.all()
 
         if filters.status is not None:
             qs = qs.filter(status=filters.status)
         if filters.city is not None:
             qs = qs.filter(city__icontains=filters.city)
-        if filters.sport_type is not None:
-            # for SQLite use a raw .filter() override
-            target_value = json.dumps(filters.sport_type.value)
-            qs = qs.filter(sport_types__contains=target_value)
-        if filters.is_indoor is not None:
-            qs = qs.filter(is_indoor=filters.is_indoor)
+        if filters.property_type is not None:
+            qs = qs.filter(property_type__in=filters.property_type)
         if filters.has_parking is not None:
             qs = qs.filter(has_parking=filters.has_parking)
+        if filters.free_cancellation:
+            qs = qs.filter(cancellation_policy="free")
+        if filters.amenities:
+            for amenity in filters.amenities:
+                qs = qs.filter(amenities__contains=json.dumps(amenity))
         if filters.min_price is not None:
-            qs = qs.filter(price_per_hour__gte=filters.min_price)
+            qs = qs.filter(price_per_night__gte=filters.min_price)
         if filters.max_price is not None:
-            qs = qs.filter(price_per_hour__lte=filters.max_price)
-        if filters.min_capacity is not None:
-            qs = qs.filter(capacity__gte=filters.min_capacity)
+            qs = qs.filter(price_per_night__lte=filters.max_price)
+        if filters.min_rating is not None:
+            qs = qs.filter(rating__gte=filters.min_rating)
+        if filters.min_guests is not None:
+            qs = qs.filter(max_guests__gte=filters.min_guests)
+        if filters.bedrooms is not None:
+            qs = qs.filter(bedrooms__gte=filters.bedrooms)
         if filters.owner_id is not None:
             qs = qs.filter(owner_id=filters.owner_id)
 
         offset = (filters.page - 1) * filters.page_size
         qs = qs.offset(offset).limit(filters.page_size)
 
-        properties = await qs.prefetch_related("images")
+        properties = await qs.prefetch_related("images", "translations")
 
         results: list[PropertyListItem] = []
         for v in properties:
@@ -245,14 +340,14 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             results.append(
                 PropertyListItem(
                     id=v.id,
-                    name=v.name,
+                    name=_resolve_name(v.translations, locale),  # type: ignore[union-attr]
                     city=v.city,
-                    sport_types=v.sport_types,
+                    property_type=v.property_type,
                     status=PropertyStatus(v.status),
-                    price_per_hour=v.price_per_hour,
+                    price_per_night=v.price_per_night,
                     currency=v.currency,
-                    capacity=v.capacity,
-                    is_indoor=v.is_indoor,
+                    max_guests=v.max_guests,
+                    bedrooms=v.bedrooms,
                     rating=v.rating,
                     total_reviews=v.total_reviews,
                     thumbnail=thumbnail,
@@ -266,6 +361,7 @@ property_image_crud = PropertyImageCRUD(PropertyImage, PropertyImageResponse)
 property_unavailability_crud = PropertyUnavailabilityCRUD(
     PropertyUnavailability, PropertyUnavailabilityResponse
 )
+property_translation_crud = PropertyTranslationCRUD(PropertyTranslation, TranslationResponse)
 
 
 async def assert_owns_property(property_id: UUID, current_user: CurrentUser) -> None:

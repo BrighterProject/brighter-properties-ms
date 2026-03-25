@@ -18,7 +18,7 @@ class PropertyScope(StrEnum):
 PROPERTY_SCOPE_DESCRIPTIONS: dict[str, str] = {
     PropertyScope.READ: "Browse and search public property listings.",
     PropertyScope.ME: "Read your own properties and their details.",
-    PropertyScope.WRITE: "Create and update your own properties.",
+    PropertyScope.WRITE: "Create and update your own properties (including translations).",
     PropertyScope.DELETE: "Delete your own properties.",
     PropertyScope.IMAGES: "Upload and manage images for your own properties.",
     PropertyScope.SCHEDULE: "Manage unavailability windows for your own properties.",

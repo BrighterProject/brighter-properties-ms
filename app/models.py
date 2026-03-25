@@ -4,14 +4,14 @@ from ms_core import AbstractModel as Model
 from tortoise import fields
 
 
-class SportType(StrEnum):
-    FOOTBALL = "football"
-    BASKETBALL = "basketball"
-    TENNIS = "tennis"
-    VOLLEYBALL = "volleyball"
-    SWIMMING = "swimming"
-    GYM = "gym"
-    PADEL = "padel"
+class PropertyType(StrEnum):
+    APARTMENT = "apartment"
+    HOUSE = "house"
+    VILLA = "villa"
+    HOTEL = "hotel"
+    HOSTEL = "hostel"
+    GUESTHOUSE = "guesthouse"
+    ROOM = "room"
     OTHER = "other"
 
 
@@ -22,63 +22,93 @@ class PropertyStatus(StrEnum):
     PENDING_APPROVAL = "pending_approval"
 
 
+class CancellationPolicy(StrEnum):
+    FREE = "free"
+    MODERATE = "moderate"
+    STRICT = "strict"
+
+
+SUPPORTED_LOCALES = ("en", "bg", "ru")
+
+
 class Property(Model):
     id = fields.UUIDField(primary_key=True)
 
-    name = fields.CharField(max_length=255)
-    description = fields.TextField()
-    sport_types = fields.JSONField(default=list)  # List[SportType]
+    property_type = fields.CharEnumField(PropertyType, default=PropertyType.APARTMENT)
     status = fields.CharEnumField(PropertyStatus, default=PropertyStatus.PENDING_APPROVAL)
 
     owner_id = fields.UUIDField()
 
-    # Location
-    address = fields.CharField(max_length=500)
+    # Location (non-translatable)
     city = fields.CharField(max_length=100)
     latitude = fields.DecimalField(max_digits=9, decimal_places=6, null=True)
     longitude = fields.DecimalField(max_digits=9, decimal_places=6, null=True)
 
     # Price
-    price_per_hour = fields.DecimalField(max_digits=8, decimal_places=2)
+    price_per_night = fields.DecimalField(max_digits=8, decimal_places=2)
     currency = fields.CharField(max_length=3, default="EUR")
 
-    # Features
-    capacity = fields.IntField(default=1)
-    is_indoor = fields.BooleanField(default=False)
-    has_parking = fields.BooleanField(default=False)
-    has_changing_rooms = fields.BooleanField(default=False)
-    has_showers = fields.BooleanField(default=False)
-    has_equipment_rental = fields.BooleanField(default=False)
-    amenities = fields.JSONField(default=list)
+    # Accommodation details
+    max_guests = fields.IntField(default=1)
+    bedrooms = fields.IntField(default=1)
+    bathrooms = fields.IntField(default=1)
+    beds = fields.IntField(default=1)
 
-    # 0=Mon - 6=Sun
-    working_hours = fields.JSONField(default=dict)
-    # For example:
-    # {
-    #   "0": {"open": "08:00", "close": "22:00"},
-    #   "6": {"open": "09:00", "close": "18:00"},
-    #   "default": {"open": "08:00", "close": "22:00"}
-    # }
+    # Features
+    has_parking = fields.BooleanField(default=False)
+    amenities = fields.JSONField(default=list)  # list[str]
+
+    # Schedule
+    check_in_time = fields.TimeField(null=True)   # e.g. 14:00
+    check_out_time = fields.TimeField(null=True)  # e.g. 11:00
+
+    # Booking constraints
+    min_nights = fields.IntField(default=1)
+    max_nights = fields.IntField(default=30)
+
+    # Policy
+    cancellation_policy = fields.CharEnumField(
+        CancellationPolicy, default=CancellationPolicy.MODERATE
+    )
 
     # Meta
     rating = fields.DecimalField(max_digits=3, decimal_places=2, default=0.0)
     total_reviews = fields.IntField(default=0)
-    total_bookings = fields.IntField(default=0)
 
     updated_at = fields.DatetimeField(auto_now=True)
 
+    # Relations
     images: fields.ReverseRelation["PropertyImage"]
     unavailabilities: fields.ReverseRelation["PropertyUnavailability"]
+    translations: fields.ReverseRelation["PropertyTranslation"]
 
     class Meta:  # type: ignore
         table = "properties"
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.name} ({self.city})"
+        return f"Property({self.id}, {self.city})"
 
     class PydanticMeta:
         exclude = ["owner__password_hash"]
+
+
+class PropertyTranslation(Model):
+    id = fields.UUIDField(primary_key=True)
+    property = fields.ForeignKeyField(
+        "models.Property", related_name="translations", on_delete=fields.CASCADE
+    )
+    locale = fields.CharField(max_length=5)  # "en", "bg", "ru"
+
+    name = fields.CharField(max_length=255)
+    description = fields.TextField()
+    address = fields.CharField(max_length=500)
+    house_rules = fields.TextField(null=True)
+
+    class Meta:  # type: ignore
+        table = "property_translations"
+        unique_together = (("property", "locale"),)
+        ordering = ["locale"]
 
 
 class PropertyImage(Model):
@@ -96,7 +126,7 @@ class PropertyImage(Model):
 
 
 class PropertyUnavailability(Model):
-    """maintenance, personal reasons etc."""
+    """Blocked date ranges — maintenance, personal reasons, etc."""
 
     id = fields.UUIDField(primary_key=True)
     property = fields.ForeignKeyField(

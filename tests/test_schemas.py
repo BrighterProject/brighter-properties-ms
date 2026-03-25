@@ -4,119 +4,119 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas import (
-    SportType,
     PropertyCreate,
     PropertyFilters,
     PropertyUnavailabilityCreate,
+    TranslationCreate,
 )
 
-from .factories import LATER, NOW
+from .factories import LATER, NOW, translation_dict
 
 
 class TestPropertyCreateSchema:
     def test_valid_payload(self):
         data = PropertyCreate(
-            name="Tennis Club",
-            description="A wonderful tennis club in the city centre.",
-            address="1 Sports Ave",
             city="Sofia",
-            price_per_hour=Decimal("25.00"),
-            sport_types=[SportType.TENNIS],
+            price_per_night=Decimal("50.00"),
+            translations=[TranslationCreate(**translation_dict("bg"))],
         )
         assert data.currency == "EUR"
-        assert data.capacity == 1
+        assert data.max_guests == 1
+        assert data.bedrooms == 1
 
     def test_currency_uppercased(self):
         data = PropertyCreate(
-            name="Club",
-            description="Long enough description here.",
-            address="Addr",
             city="City",
-            price_per_hour=Decimal("10"),
+            price_per_night=Decimal("10"),
             currency="eur",
+            translations=[TranslationCreate(**translation_dict("bg"))],
         )
         assert data.currency == "EUR"
-
-    def test_sport_types_deduplicated(self):
-        data = PropertyCreate(
-            name="Multi-sport",
-            description="Long enough description here.",
-            address="Addr",
-            city="City",
-            price_per_hour=Decimal("10"),
-            sport_types=[SportType.FOOTBALL, SportType.FOOTBALL, SportType.GYM],
-        )
-        assert data.sport_types == [SportType.FOOTBALL, SportType.GYM]
-
-    def test_name_too_short_raises(self):
-        with pytest.raises(ValidationError):
-            PropertyCreate(
-                name="X",
-                description="Fine description.",
-                address="Addr",
-                city="City",
-                price_per_hour=Decimal("10"),
-            )
 
     def test_negative_price_raises(self):
         with pytest.raises(ValidationError):
             PropertyCreate(
-                name="Club",
-                description="Fine description.",
-                address="Addr",
                 city="City",
-                price_per_hour=Decimal("-5"),
+                price_per_night=Decimal("-5"),
+                translations=[TranslationCreate(**translation_dict("bg"))],
             )
 
-    def test_capacity_zero_raises(self):
+    def test_max_guests_zero_raises(self):
         with pytest.raises(ValidationError):
             PropertyCreate(
-                name="Club",
-                description="Fine description.",
-                address="Addr",
                 city="City",
-                price_per_hour=Decimal("10"),
-                capacity=0,
+                price_per_night=Decimal("10"),
+                max_guests=0,
+                translations=[TranslationCreate(**translation_dict("bg"))],
             )
 
+    def test_min_nights_greater_than_max_raises(self):
+        with pytest.raises(ValidationError, match="min_nights"):
+            PropertyCreate(
+                city="City",
+                price_per_night=Decimal("10"),
+                min_nights=10,
+                max_nights=3,
+                translations=[TranslationCreate(**translation_dict("bg"))],
+            )
 
-class TestWorkingHoursSchema:
-    def test_valid_working_hours(self):
+    def test_missing_translations_raises(self):
+        with pytest.raises(ValidationError):
+            PropertyCreate(
+                city="City",
+                price_per_night=Decimal("10"),
+                translations=[],
+            )
+
+    def test_duplicate_locales_raises(self):
+        with pytest.raises(ValidationError, match="Duplicate locales"):
+            PropertyCreate(
+                city="City",
+                price_per_night=Decimal("10"),
+                translations=[
+                    TranslationCreate(**translation_dict("bg")),
+                    TranslationCreate(**translation_dict("bg")),
+                ],
+            )
+
+    def test_missing_bg_locale_raises(self):
+        with pytest.raises(ValidationError, match="Bulgarian"):
+            PropertyCreate(
+                city="City",
+                price_per_night=Decimal("10"),
+                translations=[TranslationCreate(**translation_dict("en"))],
+            )
+
+    def test_multiple_locales_accepted(self):
         data = PropertyCreate(
-            name="Morning Club",
-            description="Opens early every day of the week.",
-            address="Addr",
-            city="City",
-            price_per_hour=Decimal("10"),
-            working_hours={
-                "default": {"open": "08:00", "close": "22:00"},
-                "6": {"open": "10:00", "close": "18:00"},
-            },
+            city="Sofia",
+            price_per_night=Decimal("50.00"),
+            translations=[
+                TranslationCreate(**translation_dict("bg")),
+                TranslationCreate(**translation_dict("en")),
+            ],
         )
-        assert "default" in data.working_hours
-        assert "6" in data.working_hours
+        assert len(data.translations) == 2
 
-    def test_invalid_day_key_raises(self):
-        with pytest.raises(Exception, match="invalid day key"):
-            PropertyCreate(
-                name="Morning Club",
-                description="Opens early every day of the week.",
-                address="Addr",
-                city="City",
-                price_per_hour=Decimal("10"),
-                working_hours={"8": {"open": "08:00", "close": "22:00"}},
-            )
 
-    def test_close_before_open_raises(self):
+class TestTranslationSchema:
+    def test_valid_translation(self):
+        tr = TranslationCreate(**translation_dict("bg"))
+        assert tr.locale == "bg"
+
+    def test_unsupported_locale_raises(self):
+        with pytest.raises(ValidationError, match="Unsupported locale"):
+            data = translation_dict("bg")
+            data["locale"] = "fr"
+            TranslationCreate(**data)
+
+    def test_name_too_short_raises(self):
         with pytest.raises(ValidationError):
-            PropertyCreate(
-                name="Morning Club",
-                description="Opens early every day of the week.",
-                address="Addr",
-                city="City",
-                price_per_hour=Decimal("10"),
-                working_hours={"0": {"open": "22:00", "close": "08:00"}},
-            )
+            TranslationCreate(**translation_dict("bg", name="X"))
+
+    def test_description_too_short_raises(self):
+        with pytest.raises(ValidationError):
+            TranslationCreate(**translation_dict("bg", description="Short"))
 
 
 class TestPropertyFiltersSchema:

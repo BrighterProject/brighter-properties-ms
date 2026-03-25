@@ -17,22 +17,21 @@ from app.schemas import (
     PropertyStatusUpdate,
     PropertyUpdate,
 )
-from app.scopes import (
-    PropertyScope,
-)
+from app.scopes import PropertyScope
 
 router = APIRouter(prefix="/properties", tags=["properties"])
 
+DEFAULT_LOCALE = "bg"
 
-@router.get(
-    "/",
-    # dependencies=[Depends(can_read_properties)],
-)
+
+@router.get("/")
 async def list_properties(
-    response: Response, filters: PropertyFilters = Depends()
+    response: Response,
+    filters: PropertyFilters = Depends(),
+    lang: str = Query(DEFAULT_LOCALE, max_length=5),
 ) -> list[PropertyListItem]:
     response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
-    return await property_crud.list_properties(filters)
+    return await property_crud.list_properties(filters, locale=lang)
 
 
 @router.post("/", response_model=PropertyResponse, status_code=status.HTTP_201_CREATED)
@@ -46,14 +45,14 @@ async def create_property(
 @router.get("/bulk", response_model=list[PropertyListItem])
 async def get_properties_bulk(
     ids: list[UUID] = Query(..., min_length=1),
+    lang: str = Query(DEFAULT_LOCALE, max_length=5),
 ) -> list[PropertyListItem]:
-    return await property_crud.get_properties_by_ids(ids)
+    return await property_crud.get_properties_by_ids(ids, locale=lang)
 
 
 @router.get(
     "/{property_id}",
     response_model=PropertyResponse,
-    # dependencies=[Depends(can_read_properties)],
 )
 async def get_property(property_id: UUID, response: Response):
     property = await property_crud.get_property(property_id)

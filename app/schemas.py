@@ -15,15 +15,17 @@ from pydantic import (
     model_validator,
 )
 
+from app.models import SUPPORTED_LOCALES
 
-class SportType(StrEnum):
-    FOOTBALL = "football"
-    BASKETBALL = "basketball"
-    TENNIS = "tennis"
-    VOLLEYBALL = "volleyball"
-    SWIMMING = "swimming"
-    GYM = "gym"
-    PADEL = "padel"
+
+class PropertyType(StrEnum):
+    APARTMENT = "apartment"
+    HOUSE = "house"
+    VILLA = "villa"
+    HOTEL = "hotel"
+    HOSTEL = "hostel"
+    GUESTHOUSE = "guesthouse"
+    ROOM = "room"
     OTHER = "other"
 
 
@@ -34,37 +36,53 @@ class PropertyStatus(StrEnum):
     PENDING_APPROVAL = "pending_approval"
 
 
-class DayHours(BaseModel):
-    """Opening and closing time for a single day."""
-
-    open: time
-    close: time
-
-    @model_validator(mode="after")
-    def close_after_open(self) -> DayHours:
-        if self.close <= self.open:
-            raise ValueError("close time must be after open time")
-        return self
-
-    @field_serializer("open", "close")
-    def serialize_time(self, t: time):
-        return t.strftime("%H:%M")
+class CancellationPolicy(StrEnum):
+    FREE = "free"
+    MODERATE = "moderate"
+    STRICT = "strict"
 
 
-WeeklyHours = dict[str, DayHours]
+# ---------------------------------------------------------------------------
+# Translation schemas
+# ---------------------------------------------------------------------------
 
 
-def _validate_working_hours(value: Any) -> WeeklyHours:
-    """Coerce raw dict → WeeklyHours and validate day keys."""
-    if not isinstance(value, dict):
-        raise ValueError("working_hours must be a dict")
-    allowed_keys = {str(i) for i in range(7)} | {"default"}
-    result: WeeklyHours = {}
-    for k, v in value.items():
-        if k not in allowed_keys:
-            raise ValueError(f"invalid day key '{k}'; must be '0'–'6' or 'default'")
-        result[k] = DayHours.model_validate(v)
-    return result
+class TranslationBase(BaseModel):
+    locale: str = Field(..., max_length=5)
+    name: str = Field(..., min_length=2, max_length=255)
+    description: str = Field(..., min_length=10)
+    address: str = Field(..., max_length=500)
+    house_rules: str | None = None
+
+    @field_validator("locale")
+    @classmethod
+    def validate_locale(cls, v: str) -> str:
+        if v not in SUPPORTED_LOCALES:
+            raise ValueError(f"Unsupported locale '{v}'; must be one of {SUPPORTED_LOCALES}")
+        return v
+
+
+class TranslationCreate(TranslationBase):
+    pass
+
+
+class TranslationUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=255)
+    description: str | None = Field(default=None, min_length=10)
+    address: str | None = Field(default=None, max_length=500)
+    house_rules: str | None = None
+
+
+class TranslationResponse(TranslationBase):
+    id: UUID
+    property_id: UUID
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# Image schemas (unchanged)
+# ---------------------------------------------------------------------------
 
 
 class PropertyImageBase(BaseModel):
@@ -74,14 +92,10 @@ class PropertyImageBase(BaseModel):
 
 
 class PropertyImageCreate(PropertyImageBase):
-    """Used when adding an image to a property (property_id comes from the path)."""
-
     pass
 
 
 class PropertyImageUpdate(BaseModel):
-    """Partial update — all fields optional."""
-
     url: str | None = Field(default=None, max_length=500)
     is_thumbnail: bool | None = None
     order: int | None = Field(default=None, ge=0)
@@ -92,6 +106,11 @@ class PropertyImageResponse(PropertyImageBase):
     property_id: UUID
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# Unavailability schemas (unchanged)
+# ---------------------------------------------------------------------------
 
 
 class PropertyUnavailabilityBase(BaseModel):
@@ -107,14 +126,10 @@ class PropertyUnavailabilityBase(BaseModel):
 
 
 class PropertyUnavailabilityCreate(PropertyUnavailabilityBase):
-    """Used when blocking time for a property (property_id comes from the path)."""
-
     pass
 
 
 class PropertyUnavailabilityUpdate(BaseModel):
-    """Partial update — all fields optional."""
-
     start_datetime: datetime | None = None
     end_datetime: datetime | None = None
     reason: str | None = Field(default=None, max_length=255)
@@ -137,44 +152,43 @@ class PropertyUnavailabilityResponse(PropertyUnavailabilityBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ---------------------------------------------------------------------------
+# Property schemas
+# ---------------------------------------------------------------------------
+
+
 class PropertyBase(BaseModel):
-    # Core
-    name: str = Field(..., min_length=2, max_length=255)
-    description: str = Field(..., min_length=10)
-    sport_types: list[SportType] = Field(default_factory=list)
+    property_type: PropertyType = PropertyType.APARTMENT
 
     # Location
-    address: str = Field(..., max_length=500)
     city: str = Field(..., max_length=100)
     latitude: Decimal | None = Field(default=None, ge=-90, le=90, decimal_places=6)
     longitude: Decimal | None = Field(default=None, ge=-180, le=180, decimal_places=6)
 
     # Price
-    price_per_hour: Decimal = Field(..., ge=0, decimal_places=2)
+    price_per_night: Decimal = Field(..., ge=0, decimal_places=2)
     currency: Annotated[str, Field(min_length=3, max_length=3)] = "EUR"
 
+    # Accommodation
+    max_guests: int = Field(default=1, ge=1)
+    bedrooms: int = Field(default=1, ge=0)
+    bathrooms: int = Field(default=1, ge=0)
+    beds: int = Field(default=1, ge=0)
+
     # Features
-    capacity: int = Field(default=1, ge=1)
-    is_indoor: bool = False
     has_parking: bool = False
-    has_changing_rooms: bool = False
-    has_showers: bool = False
-    has_equipment_rental: bool = False
     amenities: list[str] = Field(default_factory=list)
 
     # Schedule
-    working_hours: WeeklyHours = Field(default_factory=dict)
+    check_in_time: time | None = None
+    check_out_time: time | None = None
 
-    @field_validator("sport_types", mode="before")
-    @classmethod
-    def deduplicate_sport_types(cls, v: Any) -> Any:
-        if isinstance(v, list):
-            seen: list[Any] = []
-            for item in v:
-                if item not in seen:
-                    seen.append(item)
-            return seen
-        return v
+    # Booking constraints
+    min_nights: int = Field(default=1, ge=1)
+    max_nights: int = Field(default=30, ge=1)
+
+    # Policy
+    cancellation_policy: CancellationPolicy = CancellationPolicy.MODERATE
 
     @field_validator("currency", mode="before")
     @classmethod
@@ -183,51 +197,66 @@ class PropertyBase(BaseModel):
             return v.upper()
         return v
 
-    @field_validator("working_hours", mode="before")
-    @classmethod
-    def validate_working_hours(cls, v: Any) -> Any:
-        if not v:
-            return {}
-        return _validate_working_hours(v)
+    @field_serializer("check_in_time", "check_out_time")
+    def serialize_time(self, t: time | None):
+        if t is None:
+            return None
+        return t.strftime("%H:%M")
+
+    @model_validator(mode="after")
+    def min_le_max_nights(self) -> PropertyBase:
+        if self.min_nights > self.max_nights:
+            raise ValueError("min_nights must be <= max_nights")
+        return self
 
 
 class PropertyCreate(PropertyBase):
     """
     Payload for POST /properties.
-    owner_id is injected from the authenticated user — not accepted from the client.
-    Status starts as PENDING_APPROVAL by default.
+    owner_id is injected from the authenticated user.
+    Must include at least one translation.
     """
 
-    pass
+    translations: list[TranslationCreate] = Field(..., min_length=1)
+
+    @field_validator("translations")
+    @classmethod
+    def validate_translations(cls, v: list[TranslationCreate]) -> list[TranslationCreate]:
+        locales = [t.locale for t in v]
+        if len(locales) != len(set(locales)):
+            raise ValueError("Duplicate locales in translations")
+        if "bg" not in locales:
+            raise ValueError("Bulgarian (bg) translation is required")
+        return v
 
 
 class PropertyUpdate(BaseModel):
-    """
-    Partial update for PATCH /properties/{id}.
-    Every field is optional; only provided fields are applied.
-    """
+    """Partial update — all fields optional."""
 
-    name: str | None = Field(default=None, min_length=2, max_length=255)
-    description: str | None = Field(default=None, min_length=10)
-    sport_types: list[SportType] | None = None
+    property_type: PropertyType | None = None
 
-    address: str | None = Field(default=None, max_length=500)
     city: str | None = Field(default=None, max_length=100)
     latitude: Decimal | None = Field(default=None, ge=-90, le=90)
     longitude: Decimal | None = Field(default=None, ge=-180, le=180)
 
-    price_per_hour: Decimal | None = Field(default=None, ge=0)
+    price_per_night: Decimal | None = Field(default=None, ge=0)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
 
-    capacity: int | None = Field(default=None, ge=1)
-    is_indoor: bool | None = None
+    max_guests: int | None = Field(default=None, ge=1)
+    bedrooms: int | None = Field(default=None, ge=0)
+    bathrooms: int | None = Field(default=None, ge=0)
+    beds: int | None = Field(default=None, ge=0)
+
     has_parking: bool | None = None
-    has_changing_rooms: bool | None = None
-    has_showers: bool | None = None
-    has_equipment_rental: bool | None = None
     amenities: list[str] | None = None
 
-    working_hours: WeeklyHours | None = None
+    check_in_time: time | None = None
+    check_out_time: time | None = None
+
+    min_nights: int | None = Field(default=None, ge=1)
+    max_nights: int | None = Field(default=None, ge=1)
+
+    cancellation_policy: CancellationPolicy | None = None
 
     @field_validator("currency", mode="before")
     @classmethod
@@ -235,13 +264,6 @@ class PropertyUpdate(BaseModel):
         if isinstance(v, str):
             return v.upper()
         return v
-
-    @field_validator("working_hours", mode="before")
-    @classmethod
-    def validate_working_hours(cls, v: Any) -> Any:
-        if v is None:
-            return None
-        return _validate_working_hours(v)
 
 
 class PropertyStatusUpdate(BaseModel):
@@ -257,14 +279,13 @@ class PropertyResponse(PropertyBase):
     owner_id: UUID
     status: PropertyStatus
 
-    # Computed / aggregate fields
     rating: Decimal
     total_reviews: int
-    total_bookings: int
 
     updated_at: datetime
 
     # Related
+    translations: list[TranslationResponse] = Field(default_factory=list)
     images: list[PropertyImageResponse] = Field(default_factory=list)
     unavailabilities: list[PropertyUnavailabilityResponse] = Field(default_factory=list)
 
@@ -274,21 +295,21 @@ class PropertyResponse(PropertyBase):
 class PropertyListItem(BaseModel):
     """
     Lightweight projection for GET /properties (list / search).
-    Omits heavy relations and bulk fields.
+    Returns the name in the requested locale (resolved by the CRUD layer).
     """
 
     id: UUID
-    name: str
+    name: str  # resolved from translations for the requested locale
     city: str
-    sport_types: list[SportType]
+    property_type: PropertyType
     status: PropertyStatus
-    price_per_hour: Decimal
+    price_per_night: Decimal
     currency: str
-    capacity: int
-    is_indoor: bool
+    max_guests: int
+    bedrooms: int
     rating: Decimal
     total_reviews: int
-    thumbnail: str | None = None  # first image with is_thumbnail=True if any
+    thumbnail: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -297,12 +318,15 @@ class PropertyFilters(BaseModel):
     """Bind to a FastAPI route via Depends(PropertyFilters)."""
 
     city: str | None = None
-    sport_type: SportType | None = None
-    is_indoor: bool | None = None
+    property_type: list[PropertyType] | None = None  # multiple types allowed
     has_parking: bool | None = None
+    free_cancellation: bool | None = None
+    amenities: list[str] | None = None  # all must be present
     min_price: Decimal | None = Field(default=None, ge=0)
     max_price: Decimal | None = Field(default=None, ge=0)
-    min_capacity: int | None = Field(default=None, ge=1)
+    min_rating: Decimal | None = Field(default=None, ge=0, le=5)
+    min_guests: int | None = Field(default=None, ge=1)
+    bedrooms: int | None = Field(default=None, ge=0)
     status: PropertyStatus | None = None
     owner_id: UUID | None = None
 
@@ -317,5 +341,5 @@ class PropertyFilters(BaseModel):
             and self.max_price is not None
             and (self.min_price > self.max_price)
         ):
-            raise ValueError("min_price must be ≤ max_price")
+            raise ValueError("min_price must be <= max_price")
         return self

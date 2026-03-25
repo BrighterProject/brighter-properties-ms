@@ -10,6 +10,7 @@ from .factories import (
     PROPERTY_ID,
     make_admin,
     make_user,
+    property_create_payload,
     property_list_item,
     property_response,
 )
@@ -30,16 +31,25 @@ class TestListProperties:
         assert resp.status_code == 200
         assert resp.json() == []
 
+    def test_lang_param_forwarded(self, client_factory):
+        with patch("app.routers.property.property_crud") as mock_crud:
+            mock_crud.list_properties = AsyncMock(return_value=[])
+            resp = client_factory(make_user()).get("/properties", params={"lang": "bg"})
+        assert resp.status_code == 200
+        _, kwargs = mock_crud.list_properties.call_args
+        assert kwargs["locale"] == "bg"
+
     def test_filters_forwarded(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
             mock_crud.list_properties = AsyncMock(return_value=[])
             resp = client_factory(make_user()).get(
-                "/properties", params={"city": "Sofia", "is_indoor": True, "page": 2}
+                "/properties",
+                params={"city": "Sofia", "has_parking": True, "page": 2},
             )
         assert resp.status_code == 200
         call_filters = mock_crud.list_properties.call_args[0][0]
         assert call_filters.city == "Sofia"
-        assert call_filters.is_indoor is True
+        assert call_filters.has_parking is True
         assert call_filters.page == 2
 
 
@@ -60,34 +70,32 @@ class TestGetProperty:
 
 
 class TestCreateProperty:
-    PAYLOAD = {
-        "name": "Tennis Club Sofia",
-        "description": "A great place for tennis lovers.",
-        "address": "1 Sports Ave",
-        "city": "Sofia",
-        "price_per_hour": "25.00",
-        "sport_types": ["tennis"],
-    }
-
     def test_owner_can_create(self, client_factory):
+        payload = property_create_payload()
         with patch("app.routers.property.property_crud") as mock_crud:
             mock_crud.create_property = AsyncMock(return_value=property_response())
-            resp = client_factory(make_user()).post("/properties", json=self.PAYLOAD)
+            resp = client_factory(make_user()).post("/properties", json=payload)
         assert resp.status_code == 201
         mock_crud.create_property.assert_awaited_once()
 
     def test_owner_id_injected_from_auth(self, client_factory):
-        """owner_id must come from the token, not the request body."""
+        payload = property_create_payload()
         with patch("app.routers.property.property_crud") as mock_crud:
             mock_crud.create_property = AsyncMock(return_value=property_response())
             client_factory(make_user(user_id=OWNER_ID)).post(
-                "/properties", json=self.PAYLOAD
+                "/properties", json=payload
             )
         _, kwargs = mock_crud.create_property.call_args
         assert kwargs["owner_id"] == OWNER_ID
 
     def test_invalid_payload_returns_422(self, client_factory):
-        resp = client_factory(make_user()).post("/properties", json={"name": "X"})
+        resp = client_factory(make_user()).post("/properties", json={"city": "X"})
+        assert resp.status_code == 422
+
+    def test_missing_translations_returns_422(self, client_factory):
+        payload = property_create_payload()
+        del payload["translations"]
+        resp = client_factory(make_user()).post("/properties", json=payload)
         assert resp.status_code == 422
 
     def test_user_without_write_scope_gets_403(self, anon_app):
@@ -97,25 +105,26 @@ class TestCreateProperty:
             return make_user(scopes=[PropertyScope.READ])
 
         anon_app.dependency_overrides[get_current_user] = _non_admin_user
+        payload = property_create_payload()
         with TestClient(anon_app) as c:
-            resp = c.post("/properties", json=self.PAYLOAD)
+            resp = c.post("/properties", json=payload)
 
         assert resp.status_code == 403
 
 
 class TestUpdateProperty:
-    PATCH = {"name": "Renamed Court"}
+    PATCH = {"city": "Plovdiv"}
 
     def test_owner_can_update_own_property(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
             mock_crud.update_property = AsyncMock(
-                return_value=property_response(name="Renamed Court")
+                return_value=property_response(city="Plovdiv")
             )
             resp = client_factory(make_user()).patch(
                 f"/properties/{PROPERTY_ID}", json=self.PATCH
             )
         assert resp.status_code == 200
-        assert resp.json()["name"] == "Renamed Court"
+        assert resp.json()["city"] == "Plovdiv"
 
     def test_returns_404_when_not_owner(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
@@ -130,13 +139,12 @@ class TestUpdateProperty:
             existing = PropertyResponse(**property_response())
             mock_crud.get_property = AsyncMock(return_value=existing)
             mock_crud.update_property = AsyncMock(
-                return_value=property_response(name="Admin Edit")
+                return_value=property_response(city="Admin Edit")
             )
             resp = client_factory(make_admin()).patch(
                 f"/properties/{PROPERTY_ID}", json=self.PATCH
             )
         assert resp.status_code == 200
-        # Admin path calls get_property first to resolve owner_id
         mock_crud.get_property.assert_awaited_once_with(PROPERTY_ID)
 
     def test_admin_404_when_property_missing(self, client_factory):
@@ -167,7 +175,6 @@ class TestUpdatePropertyStatus:
         assert resp.status_code == 422
 
     def test_non_admin_gets_403(self, anon_app):
-        """Non-admin users should be rejected before the route handler runs."""
         from app.deps import get_current_user
 
         async def _non_admin_user():

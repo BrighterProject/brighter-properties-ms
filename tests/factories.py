@@ -23,6 +23,7 @@ ADMIN_ID: UUID = uuid4()
 PROPERTY_ID: UUID = uuid4()
 IMAGE_ID: UUID = uuid4()
 UNAVAIL_ID: UUID = uuid4()
+TRANSLATION_ID: UUID = uuid4()
 
 NOW = datetime(2026, 6, 1, 10, 0, 0, tzinfo=UTC)
 LATER = NOW + timedelta(hours=3)
@@ -90,23 +91,63 @@ def make_user_without_scopes(*scopes_to_remove: str) -> CurrentUser:
 
 
 # ---------------------------------------------------------------------------
-# Response dict factories  (mirror what the CRUD layer returns as dicts)
-# These are intentionally plain dicts, not Pydantic models, so tests can
-# assert on JSON response bodies directly without re-serialising.
+# Translation helpers
+# ---------------------------------------------------------------------------
+
+
+def translation_dict(locale: str = "en", **overrides) -> dict:
+    bases = {
+        "en": dict(
+            locale="en",
+            name="Cozy Apartment",
+            description="A beautiful apartment in the city centre.",
+            address="123 Main St",
+            house_rules=None,
+        ),
+        "bg": dict(
+            locale="bg",
+            name="Уютен апартамент",
+            description="Красив апартамент в центъра на града.",
+            address="ул. Главна 123",
+            house_rules=None,
+        ),
+        "ru": dict(
+            locale="ru",
+            name="Уютная квартира",
+            description="Красивая квартира в центре города.",
+            address="ул. Главная 123",
+            house_rules=None,
+        ),
+    }
+    base = bases.get(locale, bases["en"])
+    return {**base, **overrides}
+
+
+def translation_response(locale: str = "en", **overrides) -> dict:
+    base = {
+        "id": str(TRANSLATION_ID),
+        "property_id": str(PROPERTY_ID),
+        **translation_dict(locale),
+    }
+    return {**base, **overrides}
+
+
+# ---------------------------------------------------------------------------
+# Response dict factories
 # ---------------------------------------------------------------------------
 
 
 def property_list_item(**overrides) -> dict:
     base = dict(
         id=str(PROPERTY_ID),
-        name="Test Court",
+        name="Cozy Apartment",
         city="Sofia",
-        sport_types=["tennis"],
+        property_type="apartment",
         status="active",
-        price_per_hour="20.00",
+        price_per_night="50.00",
         currency="EUR",
-        capacity=4,
-        is_indoor=True,
+        max_guests=4,
+        bedrooms=2,
         rating="4.50",
         total_reviews=10,
         thumbnail=None,
@@ -118,28 +159,28 @@ def property_response(**overrides) -> dict:
     base = dict(
         id=str(PROPERTY_ID),
         owner_id=str(OWNER_ID),
-        name="Test Court",
-        description="A great tennis court for everyone.",
-        sport_types=["tennis"],
+        property_type="apartment",
         status="active",
-        address="123 Main St",
         city="Sofia",
         latitude=None,
         longitude=None,
-        price_per_hour="20.00",
+        price_per_night="50.00",
         currency="EUR",
-        capacity=4,
-        is_indoor=True,
+        max_guests=4,
+        bedrooms=2,
+        bathrooms=1,
+        beds=2,
         has_parking=False,
-        has_changing_rooms=False,
-        has_showers=False,
-        has_equipment_rental=False,
         amenities=[],
-        working_hours={},
+        check_in_time="14:00",
+        check_out_time="11:00",
+        min_nights=1,
+        max_nights=30,
+        cancellation_policy="moderate",
         rating="4.50",
         total_reviews=10,
-        total_bookings=5,
         updated_at=NOW.isoformat(),
+        translations=[translation_response("bg")],
         images=[],
         unavailabilities=[],
     )
@@ -169,18 +210,18 @@ def unavail_response(**overrides) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Request payload factories  (what you POST/PATCH to the API)
+# Request payload factories
 # ---------------------------------------------------------------------------
 
 
 def property_create_payload(**overrides) -> dict:
     base = dict(
-        name="Tennis Club Sofia",
-        description="A great place for tennis lovers.",
-        address="1 Sports Ave",
         city="Sofia",
-        price_per_hour="25.00",
-        sport_types=["tennis"],
+        price_per_night="50.00",
+        property_type="apartment",
+        max_guests=4,
+        bedrooms=2,
+        translations=[translation_dict("bg")],
     )
     return {**base, **overrides}
 

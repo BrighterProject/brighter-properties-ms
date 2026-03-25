@@ -1,6 +1,6 @@
 # CLAUDE.md — brighter-properties-ms
 
-FastAPI microservice for managing sports properties (part of the BrighterProject platform).
+FastAPI microservice for managing rental properties with i18n support (part of the BrighterProject platform).
 
 ## Package management
 
@@ -46,13 +46,14 @@ The service is designed to run behind Traefik. Direct calls without those header
 ```
 app/
   settings.py          # DB_URL, USERS_MS_URL (env vars with defaults)
-  models.py            # Tortoise ORM models (Property, PropertyImage, PropertyUnavailability)
+  models.py            # Tortoise ORM models (Property, PropertyTranslation, PropertyImage, PropertyUnavailability)
   schemas.py           # Pydantic schemas — enums mirrored from models.py
   crud.py              # Data access layer, extends ms_core.CRUD
   deps.py              # Auth dependencies and pre-built scope checkers
   scopes.py            # PropertyScope StrEnum + PROPERTY_SCOPE_DESCRIPTIONS
   routers/
-    property.py           # /properties CRUD
+    property.py        # /properties CRUD
+    translations.py    # /properties/{id}/translations
     images.py          # /properties/{id}/images
     unavail.py         # /properties/{id}/unavailabilities
 tests/
@@ -72,11 +73,22 @@ New router files placed in `app/routers/` are picked up automatically by `setup_
 
 ## Key formats
 
-**PropertyStatus** enum: `pending` | `active` | `rejected` | `suspended`
+**PropertyType** enum: `apartment` | `house` | `villa` | `hotel` | `hostel` | `guesthouse` | `room` | `other`
 
-**`working_hours`** JSON (stored on Property): weekday keys `"0"`–`"6"` (0=Monday), value `{open: "HH:MM", close: "HH:MM"}` or `null` for closed days.
+**PropertyStatus** enum: `active` | `inactive` | `maintenance` | `pending_approval`
 
-**`sport_types`**: JSON list of strings (e.g. `["football", "tennis"]`).
+**CancellationPolicy** enum: `free` | `moderate` | `strict`
+
+**Supported locales**: `en`, `bg`, `ru` (defined in `models.SUPPORTED_LOCALES`)
+
+## i18n — PropertyTranslation
+
+Translatable fields (`name`, `description`, `address`, `house_rules`) live in a separate `PropertyTranslation` table with a `(property_id, locale)` unique constraint.
+
+- `POST /properties` requires at least one translation in the `translations` list.
+- `GET /properties/` and `GET /properties/bulk` accept a `?lang=` query param (default `bg`). The CRUD layer resolves the name with fallback: requested locale → `bg` → first available.
+- `GET /properties/{id}` returns all translations in the response.
+- Translations are managed via `/properties/{id}/translations` (CRUD by locale).
 
 ## Cache headers
 
@@ -129,8 +141,8 @@ from unittest.mock import AsyncMock, patch
 
 def test_create_property(owner_client):
     payload = property_create_payload()
-    with patch("app.routers.property.crud.create_property", new_callable=AsyncMock) as mock:
-        mock.return_value = property_response()
+    with patch("app.routers.property.property_crud") as mock_crud:
+        mock_crud.create_property = AsyncMock(return_value=property_response())
         resp = owner_client.post("/properties", json=payload)
     assert resp.status_code == 201
 ```
