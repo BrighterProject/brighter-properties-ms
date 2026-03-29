@@ -11,6 +11,10 @@ import asyncio
 import sys
 import uuid
 from decimal import Decimal
+from pathlib import Path
+
+# Ensure the project root (parent of scripts/) is on sys.path so `app.models` resolves.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from tortoise import Tortoise
 
