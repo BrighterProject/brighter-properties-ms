@@ -17,6 +17,10 @@ uv run <command>       # run in the venv
 ```bash
 uv run pytest                                                     # run tests
 uv run uvicorn main:application --host 0.0.0.0 --port 8001       # dev server
+
+# Seed the DB with Bulgarian property fixtures (skips if active properties exist)
+DB_URL=asyncpg://user:pass@localhost:5432/brighter uv run python scripts/seed.py
+DB_URL=... uv run python scripts/seed.py --force   # re-seed even if data exists
 ```
 
 ## Architecture
