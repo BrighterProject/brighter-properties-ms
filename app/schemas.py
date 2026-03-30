@@ -174,6 +174,8 @@ class PropertyBase(BaseModel):
     bedrooms: int = Field(default=1, ge=0)
     bathrooms: int = Field(default=1, ge=0)
     beds: int = Field(default=1, ge=0)
+    room_details: str = Field(..., max_length=255)
+    bed_info: str = Field(..., max_length=255)
 
     # Features
     has_parking: bool = False
@@ -246,6 +248,8 @@ class PropertyUpdate(BaseModel):
     bedrooms: int | None = Field(default=None, ge=0)
     bathrooms: int | None = Field(default=None, ge=0)
     beds: int | None = Field(default=None, ge=0)
+    room_details: str | None = Field(default=None, max_length=255)
+    bed_info: str | None = Field(default=None, max_length=255)
 
     has_parking: bool | None = None
     amenities: list[str] | None = None
@@ -300,7 +304,7 @@ class PropertyListItem(BaseModel):
 
     id: UUID
     name: str  # resolved from translations for the requested locale
-    description: str | None = None  # resolved from translations for the requested locale
+    description: str  # resolved from translations for the requested locale
     city: str
     property_type: PropertyType
     status: PropertyStatus
@@ -308,6 +312,8 @@ class PropertyListItem(BaseModel):
     currency: str
     max_guests: int
     bedrooms: int
+    room_details: str
+    bed_info: str
     rating: Decimal
     total_reviews: int
     thumbnail: str | None = None

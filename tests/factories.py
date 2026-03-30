@@ -141,6 +141,7 @@ def property_list_item(**overrides) -> dict:
     base = dict(
         id=str(PROPERTY_ID),
         name="Cozy Apartment",
+        description="A cozy apartment in Sofia.",
         city="Sofia",
         property_type="apartment",
         status="active",
@@ -148,6 +149,8 @@ def property_list_item(**overrides) -> dict:
         currency="EUR",
         max_guests=4,
         bedrooms=2,
+        room_details="Entire apartment \u2022 1 bathroom",
+        bed_info="2 beds",
         rating="4.50",
         total_reviews=10,
         thumbnail=None,
@@ -170,6 +173,8 @@ def property_response(**overrides) -> dict:
         bedrooms=2,
         bathrooms=1,
         beds=2,
+        room_details="Entire apartment \u2022 1 bathroom",
+        bed_info="2 beds",
         has_parking=False,
         amenities=[],
         check_in_time="14:00",
@@ -221,6 +226,8 @@ def property_create_payload(**overrides) -> dict:
         property_type="apartment",
         max_guests=4,
         bedrooms=2,
+        room_details="Entire apartment \u2022 1 bathroom",
+        bed_info="2 beds",
         translations=[translation_dict("bg")],
     )
     return {**base, **overrides}

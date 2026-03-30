@@ -53,6 +53,8 @@ class Property(Model):
     bedrooms = fields.IntField(default=1)
     bathrooms = fields.IntField(default=1)
     beds = fields.IntField(default=1)
+    room_details = fields.CharField(max_length=255)
+    bed_info = fields.CharField(max_length=255)
 
     # Features
     has_parking = fields.BooleanField(default=False)

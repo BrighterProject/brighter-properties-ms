@@ -11,10 +11,6 @@ import asyncio
 import sys
 import uuid
 from decimal import Decimal
-from pathlib import Path
-
-# Ensure the project root (parent of scripts/) is on sys.path so `app.models` resolves.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from tortoise import Tortoise
 
@@ -38,6 +34,8 @@ FIXTURES = [
         "bedrooms": 2,
         "bathrooms": 1,
         "beds": 2,
+        "room_details": "Entire apartment \u2022 1 bathroom",
+        "bed_info": "2 beds",
         "has_parking": False,
         "amenities": ["wifi", "air_conditioning", "kitchen", "washing_machine"],
         "check_in_time": "15:00",
@@ -90,6 +88,8 @@ FIXTURES = [
         "bedrooms": 4,
         "bathrooms": 2,
         "beds": 5,
+        "room_details": "Entire villa \u2022 2 bathrooms",
+        "bed_info": "5 beds",
         "has_parking": True,
         "amenities": ["wifi", "fireplace", "kitchen", "bbq", "mountain_view", "ski_storage"],
         "check_in_time": "14:00",
@@ -144,6 +144,8 @@ FIXTURES = [
         "bedrooms": 1,
         "bathrooms": 1,
         "beds": 1,
+        "room_details": "Hotel room \u2022 1 bathroom",
+        "bed_info": "1 double bed",
         "has_parking": True,
         "amenities": ["wifi", "breakfast_included", "air_conditioning", "24h_reception"],
         "check_in_time": "13:00",
@@ -193,6 +195,8 @@ FIXTURES = [
         "bedrooms": 3,
         "bathrooms": 2,
         "beds": 4,
+        "room_details": "Entire apartment \u2022 2 bathrooms",
+        "bed_info": "4 beds",
         "has_parking": True,
         "amenities": ["wifi", "sea_view", "air_conditioning", "kitchen", "balcony", "pool_access"],
         "check_in_time": "15:00",
@@ -247,6 +251,8 @@ FIXTURES = [
         "bedrooms": 4,
         "bathrooms": 2,
         "beds": 6,
+        "room_details": "Entire house \u2022 2 bathrooms",
+        "bed_info": "6 beds",
         "has_parking": True,
         "amenities": ["wifi", "garden", "bbq", "kitchen", "washing_machine", "pet_friendly"],
         "check_in_time": "14:00",
@@ -296,6 +302,8 @@ FIXTURES = [
         "bedrooms": 1,
         "bathrooms": 1,
         "beds": 1,
+        "room_details": "Entire studio \u2022 1 bathroom",
+        "bed_info": "1 double bed",
         "has_parking": False,
         "amenities": ["wifi", "air_conditioning", "coffee_machine"],
         "check_in_time": "16:00",
