@@ -34,15 +34,19 @@ DEFAULT_LOCALE = "bg"
 FALLBACK_NAME = "Untitled"
 
 
-def _resolve_name(translations, locale: str) -> str:
-    """Pick name from translations for the given locale, falling back to bg, then first."""
+def _resolve_translation(translations, locale: str):
+    """Return best-match translation for locale, falling back to bg then first."""
     by_locale = {t.locale: t for t in translations}
-    tr = by_locale.get(locale) or by_locale.get(DEFAULT_LOCALE)
-    if tr:
-        return tr.name
-    if by_locale:
-        return next(iter(by_locale.values())).name
-    return FALLBACK_NAME
+    return (
+        by_locale.get(locale)
+        or by_locale.get(DEFAULT_LOCALE)
+        or (next(iter(by_locale.values())) if by_locale else None)
+    )
+
+
+def _resolve_name(translations, locale: str) -> str:
+    tr = _resolve_translation(translations, locale)
+    return tr.name if tr else FALLBACK_NAME
 
 
 # ---------------------------------------------------------------------------
@@ -277,10 +281,12 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                 (img.url for img in v.images if img.is_thumbnail),  # type: ignore[union-attr]
                 None,
             )
+            tr = _resolve_translation(v.translations, locale)  # type: ignore[union-attr]
             results.append(
                 PropertyListItem(
                     id=v.id,
-                    name=_resolve_name(v.translations, locale),  # type: ignore[union-attr]
+                    name=tr.name if tr else FALLBACK_NAME,
+                    description=tr.description if tr else None,
                     city=v.city,
                     property_type=v.property_type,
                     status=PropertyStatus(v.status),
@@ -337,10 +343,12 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                 (img.url for img in v.images if img.is_thumbnail),  # type: ignore[union-attr]
                 None,
             )
+            tr = _resolve_translation(v.translations, locale)  # type: ignore[union-attr]
             results.append(
                 PropertyListItem(
                     id=v.id,
-                    name=_resolve_name(v.translations, locale),  # type: ignore[union-attr]
+                    name=tr.name if tr else FALLBACK_NAME,
+                    description=tr.description if tr else None,
                     city=v.city,
                     property_type=v.property_type,
                     status=PropertyStatus(v.status),

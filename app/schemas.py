@@ -300,6 +300,7 @@ class PropertyListItem(BaseModel):
 
     id: UUID
     name: str  # resolved from translations for the requested locale
+    description: str | None = None  # resolved from translations for the requested locale
     city: str
     property_type: PropertyType
     status: PropertyStatus
