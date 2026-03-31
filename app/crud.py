@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from ms_core import CRUD
 from tortoise.exceptions import DoesNotExist, IntegrityError
+from tortoise.expressions import Q
 
 from app.deps import CurrentUser
 from app.scopes import PropertyScope
@@ -333,6 +335,24 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             qs = qs.filter(bedrooms__gte=filters.bedrooms)
         if filters.owner_id is not None:
             qs = qs.filter(owner_id=filters.owner_id)
+
+        if filters.available_from is not None and filters.available_to is not None:
+            af = filters.available_from
+            at = filters.available_to
+            # Convert dates to naive datetimes for comparison with stored datetimes
+            af_dt = datetime(af.year, af.month, af.day)
+            at_dt = datetime(at.year, at.month, at.day)
+            # Overlap: unavail.start < checkOut AND unavail.end > checkIn
+            unavailable_ids = await PropertyUnavailability.filter(
+                start_datetime__lt=at_dt,
+                end_datetime__gt=af_dt,
+            ).values_list("property_id", flat=True)
+            if unavailable_ids:
+                qs = qs.exclude(id__in=list(unavailable_ids))
+
+            requested_nights = (at - af).days
+            qs = qs.filter(min_nights__lte=requested_nights)
+            qs = qs.filter(Q(max_nights__gte=requested_nights))
 
         offset = (filters.page - 1) * filters.page_size
         qs = qs.offset(offset).limit(filters.page_size)

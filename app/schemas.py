@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import date, datetime, time
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any
@@ -337,6 +337,10 @@ class PropertyFilters(BaseModel):
     status: PropertyStatus | None = None
     owner_id: UUID | None = None
 
+    # Date availability filter (both must be provided together)
+    available_from: date | None = None  # inclusive check-in date (YYYY-MM-DD)
+    available_to: date | None = None    # exclusive check-out date (YYYY-MM-DD)
+
     # Pagination
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=20, ge=1, le=100)
@@ -349,4 +353,14 @@ class PropertyFilters(BaseModel):
             and (self.min_price > self.max_price)
         ):
             raise ValueError("min_price must be <= max_price")
+        return self
+
+    @model_validator(mode="after")
+    def date_range_sane(self) -> PropertyFilters:
+        has_from = self.available_from is not None
+        has_to = self.available_to is not None
+        if has_from != has_to:
+            raise ValueError("available_from and available_to must be provided together")
+        if has_from and has_to and self.available_from >= self.available_to:  # type: ignore[operator]
+            raise ValueError("available_from must be before available_to")
         return self

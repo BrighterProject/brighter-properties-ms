@@ -52,6 +52,20 @@ class TestListProperties:
         assert call_filters.has_parking is True
         assert call_filters.page == 2
 
+    def test_availability_dates_forwarded(self, client_factory):
+        with patch("app.routers.property.property_crud") as mock_crud:
+            mock_crud.list_properties = AsyncMock(return_value=[])
+            resp = client_factory(make_user()).get(
+                "/properties",
+                params={"available_from": "2026-07-01", "available_to": "2026-07-05"},
+            )
+        assert resp.status_code == 200
+        call_filters = mock_crud.list_properties.call_args[0][0]
+        from datetime import date
+        assert call_filters.available_from == date(2026, 7, 1)
+        assert call_filters.available_to == date(2026, 7, 5)
+
+
 
 class TestGetProperty:
     def test_existing_property_returns_200(self, client_factory):
