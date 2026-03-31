@@ -9,6 +9,9 @@ if [ -z "$FORWARDED_ALLOW_IPS" ]; then
   FORWARDED_ALLOW_IPS=$(echo "$POD_IP" | awk -F. '{print $1"."$2".0.0/16"}')
 fi
 
+echo "Running database migrations..."
+uv run aerich upgrade
+
 exec uv run uvicorn main:application \
   --host 0.0.0.0 \
   --port "${UVICORN_PORT:-8000}" \
