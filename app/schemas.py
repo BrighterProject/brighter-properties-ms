@@ -157,6 +157,36 @@ class PropertyUnavailabilityResponse(PropertyUnavailabilityBase):
 # ---------------------------------------------------------------------------
 
 
+class BedType(StrEnum):
+    SINGLE = "single"
+    DOUBLE = "double"
+    QUEEN = "queen"
+    KING = "king"
+    SOFA_BED = "sofa_bed"
+    BUNK = "bunk"
+    CRIB = "crib"
+
+
+class RoomType(StrEnum):
+    BEDROOM = "bedroom"
+    LIVING_ROOM = "living_room"
+    KITCHEN = "kitchen"
+    BATHROOM = "bathroom"
+    STUDIO = "studio"
+
+
+class BedEntry(BaseModel):
+    bed_type: BedType
+    count: int = Field(default=1, ge=1)
+
+
+class RoomEntry(BaseModel):
+    room_type: RoomType
+    count: int = Field(default=1, ge=1)
+    beds: list[BedEntry] = Field(default_factory=list)
+    area_m2: float | None = Field(default=None, ge=0)
+
+
 class PropertyBase(BaseModel):
     property_type: PropertyType = PropertyType.APARTMENT
 
@@ -174,8 +204,7 @@ class PropertyBase(BaseModel):
     bedrooms: int = Field(default=1, ge=0)
     bathrooms: int = Field(default=1, ge=0)
     beds: int = Field(default=1, ge=0)
-    room_details: str = Field(..., max_length=255)
-    bed_info: str = Field(..., max_length=255)
+    rooms: list[RoomEntry] = Field(default_factory=list)
 
     # Features
     has_parking: bool = False
@@ -248,8 +277,7 @@ class PropertyUpdate(BaseModel):
     bedrooms: int | None = Field(default=None, ge=0)
     bathrooms: int | None = Field(default=None, ge=0)
     beds: int | None = Field(default=None, ge=0)
-    room_details: str | None = Field(default=None, max_length=255)
-    bed_info: str | None = Field(default=None, max_length=255)
+    rooms: list[RoomEntry] | None = None
 
     has_parking: bool | None = None
     amenities: list[str] | None = None
@@ -312,8 +340,7 @@ class PropertyListItem(BaseModel):
     currency: str
     max_guests: int
     bedrooms: int
-    room_details: str
-    bed_info: str
+    rooms: list[RoomEntry]
     rating: Decimal
     total_reviews: int
     thumbnail: str | None = None
