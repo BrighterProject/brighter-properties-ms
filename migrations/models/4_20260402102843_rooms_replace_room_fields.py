@@ -5,7 +5,7 @@ RUN_IN_TRANSACTION = True
 
 async def upgrade(db: BaseDBAsyncClient) -> str:
     return """
-        ALTER TABLE "properties" ADD "rooms" JSONB NOT NULL;
+        ALTER TABLE "properties" ADD "rooms" JSONB NOT NULL DEFAULT '{}'::json;
         ALTER TABLE "properties" DROP COLUMN "bed_info";
         ALTER TABLE "properties" DROP COLUMN "room_details";"""
 

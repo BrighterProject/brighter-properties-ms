@@ -15,7 +15,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.models import SUPPORTED_LOCALES
+from app.models import SUPPORTED_LOCALES, AmenityType as AmenityType
 
 
 class PropertyType(StrEnum):
@@ -208,7 +208,7 @@ class PropertyBase(BaseModel):
 
     # Features
     has_parking: bool = False
-    amenities: list[str] = Field(default_factory=list)
+    amenities: list[AmenityType] = Field(default_factory=list)
 
     # Schedule
     check_in_time: time | None = None
@@ -280,7 +280,7 @@ class PropertyUpdate(BaseModel):
     rooms: list[RoomEntry] | None = None
 
     has_parking: bool | None = None
-    amenities: list[str] | None = None
+    amenities: list[AmenityType] | None = None
 
     check_in_time: time | None = None
     check_out_time: time | None = None
@@ -355,7 +355,7 @@ class PropertyFilters(BaseModel):
     property_type: list[PropertyType] | None = None  # multiple types allowed
     has_parking: bool | None = None
     free_cancellation: bool | None = None
-    amenities: list[str] | None = None  # all must be present
+    amenities: list[AmenityType] | None = None  # all must be present
     min_price: Decimal | None = Field(default=None, ge=0)
     max_price: Decimal | None = Field(default=None, ge=0)
     min_rating: Decimal | None = Field(default=None, ge=0, le=5)

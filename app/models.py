@@ -28,6 +28,25 @@ class CancellationPolicy(StrEnum):
     STRICT = "strict"
 
 
+class AmenityType(StrEnum):
+    WIFI = "wifi"
+    AIR_CONDITIONING = "air_conditioning"
+    KITCHEN = "kitchen"
+    WASHING_MACHINE = "washing_machine"
+    FIREPLACE = "fireplace"
+    BBQ = "bbq"
+    MOUNTAIN_VIEW = "mountain_view"
+    SKI_STORAGE = "ski_storage"
+    BREAKFAST_INCLUDED = "breakfast_included"
+    RECEPTION_24H = "reception_24h"
+    SEA_VIEW = "sea_view"
+    BALCONY = "balcony"
+    POOL = "pool"
+    GARDEN = "garden"
+    PET_FRIENDLY = "pet_friendly"
+    COFFEE_MACHINE = "coffee_machine"
+
+
 SUPPORTED_LOCALES = ("en", "bg", "ru")
 
 
@@ -35,7 +54,9 @@ class Property(Model):
     id = fields.UUIDField(primary_key=True)
 
     property_type = fields.CharEnumField(PropertyType, default=PropertyType.APARTMENT)
-    status = fields.CharEnumField(PropertyStatus, default=PropertyStatus.PENDING_APPROVAL)
+    status = fields.CharEnumField(
+        PropertyStatus, default=PropertyStatus.PENDING_APPROVAL
+    )
 
     owner_id = fields.UUIDField()
 
@@ -53,14 +74,16 @@ class Property(Model):
     bedrooms = fields.IntField(default=1)
     bathrooms = fields.IntField(default=1)
     beds = fields.IntField(default=1)
-    rooms = fields.JSONField(default=list)  # list[RoomEntry] — structured room/bed inventory
+    rooms = fields.JSONField(
+        default=list
+    )  # list[RoomEntry] — structured room/bed inventory
 
     # Features
     has_parking = fields.BooleanField(default=False)
-    amenities = fields.JSONField(default=list)  # list[str]
+    amenities = fields.JSONField(default=list)  # list[AmenityType]
 
     # Schedule
-    check_in_time = fields.TimeField(null=True)   # e.g. 14:00
+    check_in_time = fields.TimeField(null=True)  # e.g. 14:00
     check_out_time = fields.TimeField(null=True)  # e.g. 11:00
 
     # Booking constraints

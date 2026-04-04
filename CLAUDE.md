@@ -85,6 +85,9 @@ New router files placed in `app/routers/` are picked up automatically by `setup_
 
 **Supported locales**: `en`, `bg`, `ru` (defined in `models.SUPPORTED_LOCALES`)
 
+**AmenityType** enum (stored as JSON list on Property):
+`wifi` | `air_conditioning` | `kitchen` | `washing_machine` | `fireplace` | `bbq` | `mountain_view` | `ski_storage` | `breakfast_included` | `reception_24h` | `sea_view` | `balcony` | `pool` | `garden` | `pet_friendly` | `coffee_machine`
+
 ## i18n — PropertyTranslation
 
 Translatable fields (`name`, `description`, `address`, `house_rules`) live in a separate `PropertyTranslation` table with a `(property_id, locale)` unique constraint.
