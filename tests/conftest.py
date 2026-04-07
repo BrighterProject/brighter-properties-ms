@@ -13,6 +13,8 @@ os.environ["SLOWAPI_NO_LIMITS"] = "true"
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.deps import (
     can_admin_write,
@@ -24,10 +26,12 @@ from app.deps import (
     can_write_or_admin,
     get_current_user,
 )
-from app.limiter import limiter
 from app.routers.property import router
 
 from .factories import make_admin, make_user
+
+# In-memory limiter for unit tests — avoids any Redis connection at import time.
+_limiter = Limiter(key_func=get_remote_address)
 
 # ---------------------------------------------------------------------------
 # App builder — used by all client fixtures
@@ -42,7 +46,7 @@ def build_app(current_user) -> FastAPI:
     """
     app = FastAPI()
     app.include_router(router)
-    app.state.limiter = limiter
+    app.state.limiter = _limiter
 
     async def _user():
         return current_user

@@ -18,8 +18,6 @@ class TestPropertyCreateSchema:
         data = PropertyCreate(
             city="Sofia",
             price_per_night=Decimal("50.00"),
-            room_details="Entire apartment • 1 bathroom",
-            bed_info="2 beds",
             translations=[TranslationCreate(**translation_dict("bg"))],
         )
         assert data.currency == "EUR"
@@ -31,8 +29,6 @@ class TestPropertyCreateSchema:
             city="City",
             price_per_night=Decimal("10"),
             currency="eur",
-            room_details="Entire apartment • 1 bathroom",
-            bed_info="1 bed",
             translations=[TranslationCreate(**translation_dict("bg"))],
         )
         assert data.currency == "EUR"
@@ -59,8 +55,6 @@ class TestPropertyCreateSchema:
             PropertyCreate(
                 city="City",
                 price_per_night=Decimal("10"),
-                room_details="Entire apartment • 1 bathroom",
-                bed_info="1 bed",
                 min_nights=10,
                 max_nights=3,
                 translations=[TranslationCreate(**translation_dict("bg"))],
@@ -97,8 +91,6 @@ class TestPropertyCreateSchema:
         data = PropertyCreate(
             city="Sofia",
             price_per_night=Decimal("50.00"),
-            room_details="Entire apartment • 1 bathroom",
-            bed_info="2 beds",
             translations=[
                 TranslationCreate(**translation_dict("bg")),
                 TranslationCreate(**translation_dict("en")),

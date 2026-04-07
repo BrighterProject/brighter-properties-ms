@@ -35,8 +35,11 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["B008"]  # Depends() in FastAPI function defaults is intentional
 
 [tool.pytest.ini_options]
-addopts = "-v"
+addopts = "-v -m 'not integration'"
 testpaths = ["tests"]
+markers = [
+    "integration: marks tests that require a live Redis instance (deselected by default; run with -m integration)",
+]
 
 [tool.pyright]
 reportInvalidTypeForm = "none"
