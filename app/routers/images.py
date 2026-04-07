@@ -1,12 +1,13 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.crud import assert_owns_property, property_image_crud
 from app.deps import (
     CurrentUser,
     can_images_or_admin,
 )
+from app.limiter import limiter
 from app.schemas import (
     PropertyImageCreate,
     PropertyImageResponse,
@@ -17,7 +18,8 @@ router = APIRouter(prefix="/properties/{property_id}/images", tags=["Property Im
 
 
 @router.get("", response_model=list[PropertyImageResponse])
-async def list_images(property_id: UUID):
+@limiter.limit("60/minute")
+async def list_images(request: Request, property_id: UUID):
     return await property_image_crud.list_for_property(property_id)
 
 
@@ -26,7 +28,9 @@ async def list_images(property_id: UUID):
     response_model=PropertyImageResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit("60/minute")
 async def add_image(
+    request: Request,
     property_id: UUID,
     payload: PropertyImageCreate,
     current_user: CurrentUser = Depends(can_images_or_admin),
@@ -36,7 +40,9 @@ async def add_image(
 
 
 @router.patch("/{image_id}", response_model=PropertyImageResponse)
+@limiter.limit("60/minute")
 async def update_image(
+    request: Request,
     property_id: UUID,
     image_id: UUID,
     payload: PropertyImageUpdate,
@@ -52,7 +58,9 @@ async def update_image(
 
 
 @router.delete("/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("60/minute")
 async def delete_image(
+    request: Request,
     property_id: UUID,
     image_id: UUID,
     current_user: CurrentUser = Depends(can_images_or_admin),
@@ -66,7 +74,9 @@ async def delete_image(
 
 
 @router.put("/reorder", response_model=list[PropertyImageResponse])
+@limiter.limit("60/minute")
 async def reorder_images(
+    request: Request,
     property_id: UUID,
     ordered_ids: list[UUID],
     current_user: CurrentUser = Depends(can_images_or_admin),

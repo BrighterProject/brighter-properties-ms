@@ -1,12 +1,13 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.crud import assert_owns_property, property_translation_crud
 from app.deps import (
     CurrentUser,
     can_write_or_admin,
 )
+from app.limiter import limiter
 from app.schemas import (
     TranslationCreate,
     TranslationResponse,
@@ -19,7 +20,8 @@ router = APIRouter(
 
 
 @router.get("", response_model=list[TranslationResponse])
-async def list_translations(property_id: UUID):
+@limiter.limit("60/minute")
+async def list_translations(request: Request, property_id: UUID):
     return await property_translation_crud.list_for_property(property_id)
 
 
@@ -28,7 +30,9 @@ async def list_translations(property_id: UUID):
     response_model=TranslationResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit("60/minute")
 async def add_translation(
+    request: Request,
     property_id: UUID,
     payload: TranslationCreate,
     current_user: CurrentUser = Depends(can_write_or_admin),
@@ -38,7 +42,9 @@ async def add_translation(
 
 
 @router.patch("/{locale}", response_model=TranslationResponse)
+@limiter.limit("60/minute")
 async def update_translation(
+    request: Request,
     property_id: UUID,
     locale: str,
     payload: TranslationUpdate,
@@ -55,7 +61,9 @@ async def update_translation(
 
 
 @router.delete("/{locale}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("60/minute")
 async def delete_translation(
+    request: Request,
     property_id: UUID,
     locale: str,
     current_user: CurrentUser = Depends(can_write_or_admin),

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from app.crud import property_crud
 from app.deps import (
@@ -9,6 +9,7 @@ from app.deps import (
     can_delete_or_admin,
     can_write_or_admin,
 )
+from app.limiter import limiter
 from app.schemas import (
     PropertyCreate,
     PropertyFilters,
@@ -25,7 +26,9 @@ DEFAULT_LOCALE = "bg"
 
 
 @router.get("/")
+@limiter.limit("60/minute")
 async def list_properties(
+    request: Request,
     response: Response,
     filters: PropertyFilters = Depends(),
     lang: str = Query(DEFAULT_LOCALE, max_length=5),
@@ -35,7 +38,9 @@ async def list_properties(
 
 
 @router.post("/", response_model=PropertyResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("60/minute")
 async def create_property(
+    request: Request,
     payload: PropertyCreate,
     current_user: CurrentUser = Depends(can_write_or_admin),
 ):
@@ -43,7 +48,9 @@ async def create_property(
 
 
 @router.get("/bulk", response_model=list[PropertyListItem])
+@limiter.limit("500/minute")
 async def get_properties_bulk(
+    request: Request,
     ids: list[UUID] = Query(..., min_length=1),
     lang: str = Query(DEFAULT_LOCALE, max_length=5),
 ) -> list[PropertyListItem]:
@@ -54,7 +61,8 @@ async def get_properties_bulk(
     "/{property_id}",
     response_model=PropertyResponse,
 )
-async def get_property(property_id: UUID, response: Response):
+@limiter.limit("60/minute")
+async def get_property(request: Request, property_id: UUID, response: Response):
     property = await property_crud.get_property(property_id)
     if not property:
         raise HTTPException(
@@ -65,7 +73,9 @@ async def get_property(property_id: UUID, response: Response):
 
 
 @router.patch("/{property_id}", response_model=PropertyResponse)
+@limiter.limit("60/minute")
 async def update_property(
+    request: Request,
     property_id: UUID,
     payload: PropertyUpdate,
     current_user: CurrentUser = Depends(can_write_or_admin),
@@ -97,7 +107,8 @@ async def update_property(
     response_model=PropertyResponse,
     dependencies=[Depends(can_admin_write)],
 )
-async def update_property_status(property_id: UUID, payload: PropertyStatusUpdate):
+@limiter.limit("60/minute")
+async def update_property_status(request: Request, property_id: UUID, payload: PropertyStatusUpdate):
     property = await property_crud.update_status(property_id, payload)
     if not property:
         raise HTTPException(
@@ -107,7 +118,9 @@ async def update_property_status(property_id: UUID, payload: PropertyStatusUpdat
 
 
 @router.delete("/{property_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("60/minute")
 async def delete_property(
+    request: Request,
     property_id: UUID,
     current_user: CurrentUser = Depends(can_delete_or_admin),
 ):
