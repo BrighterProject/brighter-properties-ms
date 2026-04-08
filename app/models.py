@@ -156,8 +156,8 @@ class PropertyUnavailability(Model):
     property = fields.ForeignKeyField(
         "models.Property", related_name="unavailabilities", on_delete=fields.CASCADE
     )
-    start_datetime = fields.DatetimeField()
-    end_datetime = fields.DatetimeField()
+    start_date = fields.DateField()
+    end_date = fields.DateField()
     reason = fields.CharField(max_length=255, null=True)
 
     class Meta:  # type: ignore

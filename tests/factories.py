@@ -5,7 +5,7 @@ Import from here in every test file — never define dummy data inline.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
 from app.deps import CurrentUser
@@ -26,7 +26,8 @@ UNAVAIL_ID: UUID = uuid4()
 TRANSLATION_ID: UUID = uuid4()
 
 NOW = datetime(2026, 6, 1, 10, 0, 0, tzinfo=UTC)
-LATER = NOW + timedelta(hours=3)
+UNAVAIL_START = date(2026, 6, 1)
+UNAVAIL_END = date(2026, 6, 5)
 
 
 # ---------------------------------------------------------------------------
@@ -211,8 +212,8 @@ def unavail_response(**overrides) -> dict:
     base = dict(
         id=str(UNAVAIL_ID),
         property_id=str(PROPERTY_ID),
-        start_datetime=NOW.isoformat(),
-        end_datetime=LATER.isoformat(),
+        start_date=UNAVAIL_START.isoformat(),
+        end_date=UNAVAIL_END.isoformat(),
         reason="Maintenance",
     )
     return {**base, **overrides}
@@ -241,8 +242,8 @@ def property_create_payload(**overrides) -> dict:
 
 def unavail_create_payload(**overrides) -> dict:
     base = dict(
-        start_datetime=NOW.isoformat(),
-        end_datetime=LATER.isoformat(),
+        start_date=UNAVAIL_START.isoformat(),
+        end_date=UNAVAIL_END.isoformat(),
         reason="Maintenance",
     )
     return {**base, **overrides}

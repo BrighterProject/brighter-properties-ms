@@ -114,14 +114,14 @@ class PropertyImageResponse(PropertyImageBase):
 
 
 class PropertyUnavailabilityBase(BaseModel):
-    start_datetime: datetime
-    end_datetime: datetime
+    start_date: date
+    end_date: date
     reason: str | None = Field(default=None, max_length=255)
 
     @model_validator(mode="after")
     def end_after_start(self) -> PropertyUnavailabilityBase:
-        if self.end_datetime <= self.start_datetime:
-            raise ValueError("end_datetime must be after start_datetime")
+        if self.end_date <= self.start_date:
+            raise ValueError("end_date must be after start_date")
         return self
 
 
@@ -130,18 +130,18 @@ class PropertyUnavailabilityCreate(PropertyUnavailabilityBase):
 
 
 class PropertyUnavailabilityUpdate(BaseModel):
-    start_datetime: datetime | None = None
-    end_datetime: datetime | None = None
+    start_date: date | None = None
+    end_date: date | None = None
     reason: str | None = Field(default=None, max_length=255)
 
     @model_validator(mode="after")
     def end_after_start(self) -> PropertyUnavailabilityUpdate:
         if (
-            self.start_datetime
-            and self.end_datetime
-            and (self.end_datetime <= self.start_datetime)
+            self.start_date
+            and self.end_date
+            and (self.end_date <= self.start_date)
         ):
-            raise ValueError("end_datetime must be after start_datetime")
+            raise ValueError("end_date must be after start_date")
         return self
 
 

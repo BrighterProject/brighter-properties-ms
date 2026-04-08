@@ -10,7 +10,7 @@ from app.schemas import (
     TranslationCreate,
 )
 
-from .factories import LATER, NOW, translation_dict
+from .factories import NOW, UNAVAIL_END, UNAVAIL_START, translation_dict
 
 
 class TestPropertyCreateSchema:
@@ -137,16 +137,16 @@ class TestPropertyFiltersSchema:
 
 class TestUnavailabilitySchema:
     def test_end_before_start_raises(self):
-        with pytest.raises(Exception, match="end_datetime"):
+        with pytest.raises(Exception, match="end_date"):
             PropertyUnavailabilityCreate(
-                start_datetime=LATER,
-                end_datetime=NOW,
+                start_date=UNAVAIL_END,
+                end_date=UNAVAIL_START,
             )
 
     def test_valid_window(self):
         obj = PropertyUnavailabilityCreate(
-            start_datetime=NOW,
-            end_datetime=LATER,
+            start_date=UNAVAIL_START,
+            end_date=UNAVAIL_END,
             reason="Holiday",
         )
         assert obj.reason == "Holiday"
