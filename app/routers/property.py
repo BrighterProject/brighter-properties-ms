@@ -3,7 +3,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from app.crud import property_crud
-from app.models import AMENITY_LABELS, SUPPORTED_LOCALES
 from app.deps import (
     CurrentUser,
     can_admin_write,
@@ -56,17 +55,6 @@ async def get_properties_bulk(
     lang: str = Query(DEFAULT_LOCALE, max_length=5),
 ) -> list[PropertyListItem]:
     return await property_crud.get_properties_by_ids(ids, locale=lang)
-
-
-@router.get("/amenities", response_model=dict[str, str])
-@limiter.limit("120/minute")
-async def get_amenity_labels(
-    request: Request,
-    lang: str = Query(DEFAULT_LOCALE, max_length=5),
-) -> dict[str, str]:
-    """Return a mapping of amenity key → localized label for the given locale."""
-    locale = lang if lang in SUPPORTED_LOCALES else DEFAULT_LOCALE
-    return {key: labels[locale] for key, labels in AMENITY_LABELS.items()}
 
 
 @router.get(

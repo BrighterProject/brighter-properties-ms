@@ -49,26 +49,6 @@ class AmenityType(StrEnum):
 
 SUPPORTED_LOCALES = ("en", "bg", "ru")
 
-# Human-readable labels for each amenity, keyed by locale.
-AMENITY_LABELS: dict[str, dict[str, str]] = {
-    AmenityType.WIFI:                {"en": "WiFi",                   "bg": "WiFi",                       "ru": "WiFi"},
-    AmenityType.AIR_CONDITIONING:    {"en": "Air Conditioning",       "bg": "Климатик",                   "ru": "Кондиционер"},
-    AmenityType.KITCHEN:             {"en": "Kitchen",                "bg": "Кухня",                      "ru": "Кухня"},
-    AmenityType.WASHING_MACHINE:     {"en": "Washing Machine",        "bg": "Перална машина",             "ru": "Стиральная машина"},
-    AmenityType.FIREPLACE:           {"en": "Fireplace",              "bg": "Камина",                     "ru": "Камин"},
-    AmenityType.BBQ:                 {"en": "BBQ",                    "bg": "Барбекю",                    "ru": "Мангал"},
-    AmenityType.MOUNTAIN_VIEW:       {"en": "Mountain View",          "bg": "Гледка към планината",       "ru": "Вид на горы"},
-    AmenityType.SKI_STORAGE:         {"en": "Ski Storage",            "bg": "Съхранение на ски",          "ru": "Хранение лыж"},
-    AmenityType.BREAKFAST_INCLUDED:  {"en": "Breakfast Included",     "bg": "Закуска включена",           "ru": "Завтрак включён"},
-    AmenityType.RECEPTION_24H:       {"en": "24h Reception",          "bg": "24ч рецепция",               "ru": "Круглосуточная рецепция"},
-    AmenityType.SEA_VIEW:            {"en": "Sea View",               "bg": "Гледка към морето",          "ru": "Вид на море"},
-    AmenityType.BALCONY:             {"en": "Balcony",                "bg": "Балкон",                     "ru": "Балкон"},
-    AmenityType.POOL:                {"en": "Pool",                   "bg": "Басейн",                     "ru": "Бассейн"},
-    AmenityType.GARDEN:              {"en": "Garden",                 "bg": "Градина",                    "ru": "Сад"},
-    AmenityType.PET_FRIENDLY:        {"en": "Pet Friendly",           "bg": "Домашни любимци",            "ru": "Можно с питомцами"},
-    AmenityType.COFFEE_MACHINE:      {"en": "Coffee Machine",         "bg": "Кафемашина",                 "ru": "Кофемашина"},
-}
-
 
 class Property(Model):
     id = fields.UUIDField(primary_key=True)
