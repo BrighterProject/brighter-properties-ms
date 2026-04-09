@@ -143,7 +143,7 @@ class PropertyUnavailabilityCRUD(CRUD[PropertyUnavailability, PropertyUnavailabi
 
     async def list_for_property(self, property_id: UUID) -> list[PropertyUnavailabilityResponse]:
         items = await PropertyUnavailability.filter(property_id=property_id).order_by(
-            "start_datetime"
+            "start_date"
         )
         return [
             PropertyUnavailabilityResponse.model_validate(item, from_attributes=True)
@@ -338,13 +338,10 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         if filters.available_from is not None and filters.available_to is not None:
             af = filters.available_from
             at = filters.available_to
-            # Convert dates to naive datetimes for comparison with stored datetimes
-            af_dt = datetime(af.year, af.month, af.day)
-            at_dt = datetime(at.year, at.month, at.day)
             # Overlap: unavail.start < checkOut AND unavail.end > checkIn
             unavailable_ids = await PropertyUnavailability.filter(
-                start_datetime__lt=at_dt,
-                end_datetime__gt=af_dt,
+                start_date__lt=at,
+                end_date__gt=af,
             ).values_list("property_id", flat=True)
             if unavailable_ids:
                 qs = qs.exclude(id__in=list(unavailable_ids))
