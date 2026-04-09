@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import date, datetime
+from functools import lru_cache
 from uuid import UUID
 
+import httpx
 from fastapi import HTTPException, status
 from ms_core import CRUD
 from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.expressions import Q
 
+from app import settings
 from app.deps import CurrentUser
 from app.scopes import PropertyScope
 
@@ -34,6 +37,30 @@ from .schemas import (
 
 DEFAULT_LOCALE = "bg"
 FALLBACK_NAME = "Untitled"
+
+
+@lru_cache(maxsize=1)
+def _bookings_http_client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        base_url=settings.bookings_ms_url,
+        timeout=httpx.Timeout(3.0),
+        follow_redirects=True,
+    )
+
+
+async def _get_booked_property_ids(from_date: date, to_date: date) -> list[UUID]:
+    """Return property IDs with active bookings overlapping [from_date, to_date).
+    Fails silently (returns empty list) if bookings-ms is unreachable."""
+    try:
+        resp = await _bookings_http_client().get(
+            "/bookings/occupied-property-ids",
+            params={"from_date": str(from_date), "to_date": str(to_date)},
+        )
+        if resp.status_code == 200:
+            return [UUID(pid) for pid in resp.json()]
+    except (httpx.RequestError, ValueError):
+        pass
+    return []
 
 
 def _resolve_translation(translations, locale: str):
@@ -343,8 +370,10 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                 start_date__lt=at,
                 end_date__gt=af,
             ).values_list("property_id", flat=True)
-            if unavailable_ids:
-                qs = qs.exclude(id__in=list(unavailable_ids))
+            booked_ids = await _get_booked_property_ids(af, at)
+            excluded = set(map(str, unavailable_ids)) | {str(bid) for bid in booked_ids}
+            if excluded:
+                qs = qs.exclude(id__in=list(excluded))
 
             requested_nights = (at - af).days
             qs = qs.filter(min_nights__lte=requested_nights)
