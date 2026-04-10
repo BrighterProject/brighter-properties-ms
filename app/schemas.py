@@ -358,7 +358,7 @@ class PropertyFilters(BaseModel):
     amenities: list[AmenityType] | None = None  # all must be present
     min_price: Decimal | None = Field(default=None, ge=0)
     max_price: Decimal | None = Field(default=None, ge=0)
-    min_rating: Decimal | None = Field(default=None, ge=0, le=5)
+    min_rating: Decimal | None = Field(default=None, ge=0, le=10)
     min_guests: int | None = Field(default=None, ge=1)
     bedrooms: int | None = Field(default=None, ge=0)
     status: PropertyStatus | None = None
