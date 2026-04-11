@@ -92,7 +92,9 @@ New router files placed in `app/routers/` are picked up automatically by `setup_
 
 Translatable fields (`name`, `description`, `address`, `house_rules`) live in a separate `PropertyTranslation` table with a `(property_id, locale)` unique constraint.
 
-- `POST /properties` requires at least one translation in the `translations` list.
+Translatable fields: `name`, `description`, `address`, `house_rules` (optional). `house_rules` can be null; the others are required on creation.
+
+- `POST /properties` requires at least one translation in the `translations` list; the `bg` locale is mandatory.
 - `GET /properties/` and `GET /properties/bulk` accept a `?lang=` query param (default `bg`). The CRUD layer resolves the name with fallback: requested locale → `bg` → first available.
 - `GET /properties/{id}` returns all translations in the response.
 - Translations are managed via `/properties/{id}/translations` (CRUD by locale).
