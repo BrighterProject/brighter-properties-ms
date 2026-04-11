@@ -34,7 +34,6 @@ from .schemas import (
     TranslationUpdate,
 )
 
-DEFAULT_LOCALE = "bg"
 FALLBACK_NAME = "Untitled"
 
 
@@ -67,7 +66,7 @@ def _resolve_translation(translations, locale: str):
     by_locale = {t.locale: t for t in translations}
     return (
         by_locale.get(locale)
-        or by_locale.get(DEFAULT_LOCALE)
+        or by_locale.get(settings.DEFAULT_LOCALE)
         or (next(iter(by_locale.values())) if by_locale else None)
     )
 
@@ -304,7 +303,7 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         return PropertyResponse.model_validate(inst, from_attributes=True)
 
     async def get_properties_by_ids(
-        self, ids: list[UUID], locale: str = DEFAULT_LOCALE
+        self, ids: list[UUID], locale: str = settings.DEFAULT_LOCALE
     ) -> list[PropertyListItem]:
         properties = await Property.filter(id__in=ids).prefetch_related(
             "images", "translations"
@@ -337,7 +336,7 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         return results
 
     async def list_properties(
-        self, filters: PropertyFilters, locale: str = DEFAULT_LOCALE
+        self, filters: PropertyFilters, locale: str = settings.DEFAULT_LOCALE
     ) -> list[PropertyListItem]:
         qs = Property.all()
 

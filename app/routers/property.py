@@ -1,3 +1,4 @@
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -19,10 +20,15 @@ from app.schemas import (
     PropertyUpdate,
 )
 from app.scopes import PropertyScope
+from app.settings import DEFAULT_LOCALE
 
 router = APIRouter(prefix="/properties", tags=["properties"])
 
-DEFAULT_LOCALE = "bg"
+
+@router.get("/items/")
+# Используем Annotated и Query() для привязки модели к query-параметрам
+async def read_items(filter_query: Annotated[PropertyFilters, Query()]):
+    return filter_query
 
 
 @router.get("/")
@@ -30,11 +36,10 @@ DEFAULT_LOCALE = "bg"
 async def list_properties(
     request: Request,
     response: Response,
-    filters: PropertyFilters = Depends(),
-    lang: str = Query(DEFAULT_LOCALE, max_length=5),
+    filters: PropertyFilters = Query(),
 ) -> list[PropertyListItem]:
     response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
-    return await property_crud.list_properties(filters, locale=lang)
+    return await property_crud.list_properties(filters, locale=filters.lang)
 
 
 @router.post("/", response_model=PropertyResponse, status_code=status.HTTP_201_CREATED)
@@ -108,7 +113,9 @@ async def update_property(
     dependencies=[Depends(can_admin_write)],
 )
 @limiter.limit("60/minute")
-async def update_property_status(request: Request, property_id: UUID, payload: PropertyStatusUpdate):
+async def update_property_status(
+    request: Request, property_id: UUID, payload: PropertyStatusUpdate
+):
     property = await property_crud.update_status(property_id, payload)
     if not property:
         raise HTTPException(
@@ -127,7 +134,9 @@ async def delete_property(
     if PropertyScope.ADMIN_DELETE in current_user.scopes:
         deleted = await property_crud.admin_delete_property(property_id)
     else:
-        deleted = await property_crud.delete_property(property_id, owner_id=current_user.id)
+        deleted = await property_crud.delete_property(
+            property_id, owner_id=current_user.id
+        )
 
     if not deleted:
         raise HTTPException(

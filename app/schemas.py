@@ -6,7 +6,6 @@ from enum import StrEnum
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import Query
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -16,7 +15,9 @@ from pydantic import (
     model_validator,
 )
 
-from app.models import SUPPORTED_LOCALES, AmenityType as AmenityType
+from app.models import SUPPORTED_LOCALES
+from app.models import AmenityType as AmenityType
+from app.settings import DEFAULT_LOCALE
 
 
 class PropertyType(StrEnum):
@@ -59,7 +60,9 @@ class TranslationBase(BaseModel):
     @classmethod
     def validate_locale(cls, v: str) -> str:
         if v not in SUPPORTED_LOCALES:
-            raise ValueError(f"Unsupported locale '{v}'; must be one of {SUPPORTED_LOCALES}")
+            raise ValueError(
+                f"Unsupported locale '{v}'; must be one of {SUPPORTED_LOCALES}"
+            )
         return v
 
 
@@ -137,11 +140,7 @@ class PropertyUnavailabilityUpdate(BaseModel):
 
     @model_validator(mode="after")
     def end_after_start(self) -> PropertyUnavailabilityUpdate:
-        if (
-            self.start_date
-            and self.end_date
-            and (self.end_date <= self.start_date)
-        ):
+        if self.start_date and self.end_date and (self.end_date <= self.start_date):
             raise ValueError("end_date must be after start_date")
         return self
 
@@ -253,7 +252,9 @@ class PropertyCreate(PropertyBase):
 
     @field_validator("translations")
     @classmethod
-    def validate_translations(cls, v: list[TranslationCreate]) -> list[TranslationCreate]:
+    def validate_translations(
+        cls, v: list[TranslationCreate]
+    ) -> list[TranslationCreate]:
         locales = [t.locale for t in v]
         if len(locales) != len(set(locales)):
             raise ValueError("Duplicate locales in translations")
@@ -353,10 +354,12 @@ class PropertyFilters(BaseModel):
     """Bind to a FastAPI route via Depends(PropertyFilters)."""
 
     city: str | None = None
-    property_type: Annotated[list[PropertyType] | None, Query()] = None  # multiple types allowed
+    # property_type: Annotated[list[PropertyType] | None, Query()] = None  # multiple types allowed
+    property_type: list[PropertyType] | None = Field(default=None)
+
     has_parking: bool | None = None
     free_cancellation: bool | None = None
-    amenities: Annotated[list[AmenityType] | None, Query()] = None  # all must be present
+    amenities: list[AmenityType] | None = None  # all must be present
     min_price: Decimal | None = Field(default=None, ge=0)
     max_price: Decimal | None = Field(default=None, ge=0)
     min_rating: Decimal | None = Field(default=None, ge=0, le=10)
@@ -367,11 +370,13 @@ class PropertyFilters(BaseModel):
 
     # Date availability filter (both must be provided together)
     available_from: date | None = None  # inclusive check-in date (YYYY-MM-DD)
-    available_to: date | None = None    # exclusive check-out date (YYYY-MM-DD)
+    available_to: date | None = None  # exclusive check-out date (YYYY-MM-DD)
 
     # Pagination
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=20, ge=1, le=100)
+
+    lang: str = Field(default=DEFAULT_LOCALE, max_length=5)
 
     @model_validator(mode="after")
     def price_range_sane(self) -> PropertyFilters:
@@ -388,7 +393,9 @@ class PropertyFilters(BaseModel):
         has_from = self.available_from is not None
         has_to = self.available_to is not None
         if has_from != has_to:
-            raise ValueError("available_from and available_to must be provided together")
+            raise ValueError(
+                "available_from and available_to must be provided together"
+            )
         if has_from and has_to and self.available_from >= self.available_to:  # type: ignore[operator]
             raise ValueError("available_from must be before available_to")
         return self
