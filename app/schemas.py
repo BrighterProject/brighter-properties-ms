@@ -6,6 +6,7 @@ from enum import StrEnum
 from typing import Annotated, Any
 from uuid import UUID
 
+from fastapi import Query
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -354,12 +355,10 @@ class PropertyFilters(BaseModel):
     """Bind to a FastAPI route via Depends(PropertyFilters)."""
 
     city: str | None = None
-    # property_type: Annotated[list[PropertyType] | None, Query()] = None  # multiple types allowed
     property_type: list[PropertyType] | None = Field(default=None)
-
     has_parking: bool | None = None
     free_cancellation: bool | None = None
-    amenities: list[AmenityType] | None = None  # all must be present
+    amenities: Annotated[list[AmenityType] | None, Query()] = None
     min_price: Decimal | None = Field(default=None, ge=0)
     max_price: Decimal | None = Field(default=None, ge=0)
     min_rating: Decimal | None = Field(default=None, ge=0, le=10)
