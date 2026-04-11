@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import json
-from datetime import date, datetime
+from datetime import date
 from functools import lru_cache
 from uuid import UUID
 
@@ -88,9 +87,9 @@ class PropertyImageCRUD(CRUD[PropertyImage, PropertyImageResponse]):  # type: ig
         self, property_id: UUID, payload: PropertyImageCreate
     ) -> PropertyImageResponse:
         if payload.is_thumbnail:
-            await PropertyImage.filter(property_id=property_id, is_thumbnail=True).update(
-                is_thumbnail=False
-            )
+            await PropertyImage.filter(
+                property_id=property_id, is_thumbnail=True
+            ).update(is_thumbnail=False)
 
         inst = await PropertyImage.create(
             property_id=property_id,
@@ -108,9 +107,9 @@ class PropertyImageCRUD(CRUD[PropertyImage, PropertyImageResponse]):  # type: ig
         updates = payload.model_dump(exclude_none=True)
 
         if updates.get("is_thumbnail"):
-            await PropertyImage.filter(property_id=property_id, is_thumbnail=True).update(
-                is_thumbnail=False
-            )
+            await PropertyImage.filter(
+                property_id=property_id, is_thumbnail=True
+            ).update(is_thumbnail=False)
 
         await inst.update_from_dict(updates).save()
         return PropertyImageResponse.model_validate(inst, from_attributes=True)
@@ -140,7 +139,9 @@ class PropertyImageCRUD(CRUD[PropertyImage, PropertyImageResponse]):  # type: ig
 # ---------------------------------------------------------------------------
 
 
-class PropertyUnavailabilityCRUD(CRUD[PropertyUnavailability, PropertyUnavailabilityResponse]):  # type: ignore
+class PropertyUnavailabilityCRUD(
+    CRUD[PropertyUnavailability, PropertyUnavailabilityResponse]
+):  # type: ignore
     async def create_for_property(
         self, property_id: UUID, payload: PropertyUnavailabilityCreate
     ) -> PropertyUnavailabilityResponse:
@@ -168,7 +169,9 @@ class PropertyUnavailabilityCRUD(CRUD[PropertyUnavailability, PropertyUnavailabi
     async def delete(self, unavailability_id: UUID, property_id: UUID) -> bool:
         return await self.delete_by(id=unavailability_id, property_id=property_id)
 
-    async def list_for_property(self, property_id: UUID) -> list[PropertyUnavailabilityResponse]:
+    async def list_for_property(
+        self, property_id: UUID
+    ) -> list[PropertyUnavailabilityResponse]:
         items = await PropertyUnavailability.filter(property_id=property_id).order_by(
             "start_date"
         )
@@ -221,7 +224,9 @@ class PropertyTranslationCRUD(CRUD[PropertyTranslation, TranslationResponse]):  
         return count > 0
 
     async def list_for_property(self, property_id: UUID) -> list[TranslationResponse]:
-        items = await PropertyTranslation.filter(property_id=property_id).order_by("locale")
+        items = await PropertyTranslation.filter(property_id=property_id).order_by(
+            "locale"
+        )
         return [
             TranslationResponse.model_validate(item, from_attributes=True)
             for item in items
@@ -291,9 +296,9 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         self, property_id: UUID, owner_id: UUID
     ) -> PropertyResponse | None:
         try:
-            inst = await Property.get(id=property_id, owner_id=owner_id).prefetch_related(
-                *PREFETCH
-            )
+            inst = await Property.get(
+                id=property_id, owner_id=owner_id
+            ).prefetch_related(*PREFETCH)
         except DoesNotExist:
             return None
         return PropertyResponse.model_validate(inst, from_attributes=True)
@@ -348,7 +353,7 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             qs = qs.filter(cancellation_policy="free")
         if filters.amenities:
             for amenity in filters.amenities:
-                qs = qs.filter(amenities__contains=json.dumps([amenity]))
+                qs = qs.filter(amenities__contains=f'"{amenity}"')
         if filters.min_price is not None:
             qs = qs.filter(price_per_night__gte=filters.min_price)
         if filters.max_price is not None:
@@ -417,7 +422,9 @@ property_image_crud = PropertyImageCRUD(PropertyImage, PropertyImageResponse)
 property_unavailability_crud = PropertyUnavailabilityCRUD(
     PropertyUnavailability, PropertyUnavailabilityResponse
 )
-property_translation_crud = PropertyTranslationCRUD(PropertyTranslation, TranslationResponse)
+property_translation_crud = PropertyTranslationCRUD(
+    PropertyTranslation, TranslationResponse
+)
 
 
 async def assert_owns_property(property_id: UUID, current_user: CurrentUser) -> None:
