@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
-from datetime import datetime
+from datetime import date, datetime
+from functools import lru_cache
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -321,7 +321,7 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             qs = qs.filter(cancellation_policy="free")
         if filters.amenities:
             for amenity in filters.amenities:
-                qs = qs.filter(amenities__contains=json.dumps(amenity))
+                qs = qs.filter(amenities__contains=f'"{amenity}"')
         if filters.min_price is not None:
             qs = qs.filter(price_per_night__gte=filters.min_price)
         if filters.max_price is not None:
