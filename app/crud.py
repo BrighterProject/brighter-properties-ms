@@ -123,6 +123,13 @@ class PropertyImageCRUD(CRUD[PropertyImage, PropertyImageResponse]):  # type: ig
             for img in images
         ]
 
+    async def replace_for_property(
+        self, property_id: UUID, images: list[PropertyImageCreate]
+    ) -> None:
+        await PropertyImage.filter(property_id=property_id).delete()
+        for img in images:
+            await PropertyImage.create(property_id=property_id, **img.model_dump())
+
     async def reorder(
         self, property_id: UUID, ordered_ids: list[UUID]
     ) -> list[PropertyImageResponse]:
@@ -222,6 +229,23 @@ class PropertyTranslationCRUD(CRUD[PropertyTranslation, TranslationResponse]):  
         ).delete()
         return count > 0
 
+    async def upsert_for_property(
+        self, property_id: UUID, translations: dict[str, TranslationUpdate]
+    ) -> None:
+        for locale, tr in translations.items():
+            tr_dict = tr.model_dump(exclude_none=True)
+            existing = await PropertyTranslation.get_or_none(
+                property_id=property_id, locale=locale
+            )
+            if existing:
+                if tr_dict:
+                    await existing.update_from_dict(tr_dict).save()
+            else:
+                if {"name", "description", "address"}.issubset(tr_dict):
+                    await PropertyTranslation.create(
+                        property_id=property_id, locale=locale, **tr_dict
+                    )
+
     async def list_for_property(self, property_id: UUID) -> list[TranslationResponse]:
         items = await PropertyTranslation.filter(property_id=property_id).order_by(
             "locale"
@@ -265,7 +289,12 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         if not inst:
             return None
 
-        await inst.update_from_dict(payload.model_dump(exclude_none=True)).save()
+        property_fields = payload.model_dump(
+            exclude_none=True, exclude={"translations", "images"}
+        )
+        if property_fields:
+            await inst.update_from_dict(property_fields).save()
+
         await inst.fetch_related(*PREFETCH)
         return PropertyResponse.model_validate(inst, from_attributes=True)
 

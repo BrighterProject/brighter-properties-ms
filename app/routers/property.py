@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
-from app.crud import property_crud
+from app.crud import property_crud, property_image_crud, property_translation_crud
 from app.deps import (
     CurrentUser,
     can_admin_write,
@@ -86,25 +86,33 @@ async def update_property(
     current_user: CurrentUser = Depends(can_write_or_admin),
 ):
     if PropertyScope.ADMIN_WRITE in current_user.scopes:
-        property = await property_crud.get_property(property_id)
-        if not property:
+        existing = await property_crud.get_property(property_id)
+        if not existing:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Property not found"
             )
-        property = await property_crud.update_property(
-            property_id, payload, owner_id=property.owner_id
+        updated = await property_crud.update_property(
+            property_id, payload, owner_id=existing.owner_id
         )
     else:
-        property = await property_crud.update_property(
+        updated = await property_crud.update_property(
             property_id, payload, owner_id=current_user.id
         )
 
-    if not property:
+    if not updated:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Property not found or you don't own it",
         )
-    return property
+
+    if payload.images is not None:
+        await property_image_crud.replace_for_property(property_id, payload.images)
+    if payload.translations is not None:
+        await property_translation_crud.upsert_for_property(property_id, payload.translations)
+
+    if payload.images is not None or payload.translations is not None:
+        return await property_crud.get_property(property_id)
+    return updated
 
 
 @router.patch(

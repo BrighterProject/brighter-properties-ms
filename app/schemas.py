@@ -294,11 +294,31 @@ class PropertyUpdate(BaseModel):
 
     cancellation_policy: CancellationPolicy | None = None
 
+    # Locale-keyed translation upserts (locale → partial fields).
+    # Existing translations are updated; missing locales are created if
+    # name/description/address are all present.
+    translations: dict[str, TranslationUpdate] | None = None
+
+    # Full image replacement: when provided, existing images are deleted and
+    # replaced with this list.
+    images: list[PropertyImageCreate] | None = None
+
     @field_validator("currency", mode="before")
     @classmethod
     def uppercase_currency(cls, v: Any) -> Any:
         if isinstance(v, str):
             return v.upper()
+        return v
+
+    @field_validator("translations")
+    @classmethod
+    def validate_translation_locales(cls, v: dict[str, TranslationUpdate] | None) -> dict[str, TranslationUpdate] | None:
+        if v is not None:
+            for locale in v:
+                if locale not in SUPPORTED_LOCALES:
+                    raise ValueError(
+                        f"Unsupported locale '{locale}'; must be one of {SUPPORTED_LOCALES}"
+                    )
         return v
 
 
