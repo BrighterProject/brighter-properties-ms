@@ -250,6 +250,7 @@ class PropertyCreate(PropertyBase):
     """
 
     translations: list[TranslationCreate] = Field(..., min_length=1)
+    images: list[PropertyImageCreate] = Field(default_factory=list)
 
     @field_validator("translations")
     @classmethod
