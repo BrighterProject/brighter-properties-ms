@@ -49,7 +49,16 @@ async def create_property(
     payload: PropertyCreate,
     current_user: CurrentUser = Depends(can_write_or_admin),
 ):
-    return await property_crud.create_property(payload, owner_id=current_user.id)
+    created = await property_crud.create_property(payload, owner_id=current_user.id)
+
+    for tr in payload.translations:
+        await property_translation_crud.create_for_property(created.id, tr)
+    for img in payload.images:
+        await property_image_crud.create_for_property(created.id, img)
+
+    if payload.translations or payload.images:
+        return await property_crud.get_property(created.id)
+    return created
 
 
 @router.get("/bulk", response_model=list[PropertyListItem])

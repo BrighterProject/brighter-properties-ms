@@ -267,18 +267,8 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
     async def create_property(
         self, payload: PropertyCreate, owner_id: UUID
     ) -> PropertyResponse:
-        translations_data = payload.translations
-        images_data = payload.images
         property_data = payload.model_dump(exclude={"translations", "images"})
-
         inst = await Property.create(owner_id=owner_id, **property_data)
-
-        for tr in translations_data:
-            await PropertyTranslation.create(property_id=inst.id, **tr.model_dump())
-
-        for img in images_data:
-            await PropertyImage.create(property_id=inst.id, **img.model_dump())
-
         await inst.fetch_related(*PREFETCH)
         return PropertyResponse.model_validate(inst, from_attributes=True)
 
