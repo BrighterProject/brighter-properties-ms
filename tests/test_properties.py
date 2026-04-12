@@ -86,16 +86,32 @@ class TestGetProperty:
 class TestCreateProperty:
     def test_owner_can_create(self, client_factory):
         payload = property_create_payload()
-        with patch("app.routers.property.property_crud") as mock_crud:
-            mock_crud.create_property = AsyncMock(return_value=property_response())
+        created = PropertyResponse(**property_response())
+        with (
+            patch("app.routers.property.property_crud") as mock_crud,
+            patch("app.routers.property.property_translation_crud") as mock_tr,
+            patch("app.routers.property.property_image_crud") as mock_img,
+        ):
+            mock_crud.create_property = AsyncMock(return_value=created)
+            mock_crud.get_property = AsyncMock(return_value=created)
+            mock_tr.create_for_property = AsyncMock()
+            mock_img.create_for_property = AsyncMock()
             resp = client_factory(make_user()).post("/properties", json=payload)
         assert resp.status_code == 201
         mock_crud.create_property.assert_awaited_once()
 
     def test_owner_id_injected_from_auth(self, client_factory):
         payload = property_create_payload()
-        with patch("app.routers.property.property_crud") as mock_crud:
-            mock_crud.create_property = AsyncMock(return_value=property_response())
+        created = PropertyResponse(**property_response())
+        with (
+            patch("app.routers.property.property_crud") as mock_crud,
+            patch("app.routers.property.property_translation_crud") as mock_tr,
+            patch("app.routers.property.property_image_crud") as mock_img,
+        ):
+            mock_crud.create_property = AsyncMock(return_value=created)
+            mock_crud.get_property = AsyncMock(return_value=created)
+            mock_tr.create_for_property = AsyncMock()
+            mock_img.create_for_property = AsyncMock()
             client_factory(make_user(user_id=OWNER_ID)).post(
                 "/properties", json=payload
             )
@@ -150,8 +166,6 @@ class TestUpdateProperty:
 
     def test_admin_bypasses_ownership(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
-            existing = PropertyResponse(**property_response())
-            mock_crud.get_property = AsyncMock(return_value=existing)
             mock_crud.update_property = AsyncMock(
                 return_value=property_response(city="Admin Edit")
             )
@@ -159,11 +173,12 @@ class TestUpdateProperty:
                 f"/properties/{PROPERTY_ID}", json=self.PATCH
             )
         assert resp.status_code == 200
-        mock_crud.get_property.assert_awaited_once_with(PROPERTY_ID)
+        _, kwargs = mock_crud.update_property.call_args
+        assert kwargs["owner_id"] is None
 
     def test_admin_404_when_property_missing(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
-            mock_crud.get_property = AsyncMock(return_value=None)
+            mock_crud.update_property = AsyncMock(return_value=None)
             resp = client_factory(make_admin()).patch(
                 f"/properties/{PROPERTY_ID}", json=self.PATCH
             )
