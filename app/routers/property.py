@@ -94,19 +94,10 @@ async def update_property(
     payload: PropertyUpdate,
     current_user: CurrentUser = Depends(can_write_or_admin),
 ):
-    if PropertyScope.ADMIN_WRITE in current_user.scopes:
-        existing = await property_crud.get_property(property_id)
-        if not existing:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Property not found"
-            )
-        updated = await property_crud.update_property(
-            property_id, payload, owner_id=existing.owner_id
-        )
-    else:
-        updated = await property_crud.update_property(
-            property_id, payload, owner_id=current_user.id
-        )
+    is_admin = PropertyScope.ADMIN_WRITE in current_user.scopes or PropertyScope.ADMIN in current_user.scopes
+    updated = await property_crud.update_property(
+        property_id, payload, owner_id=None if is_admin else current_user.id
+    )
 
     if not updated:
         raise HTTPException(
@@ -148,7 +139,8 @@ async def delete_property(
     property_id: UUID,
     current_user: CurrentUser = Depends(can_delete_or_admin),
 ):
-    if PropertyScope.ADMIN_DELETE in current_user.scopes:
+    is_admin = PropertyScope.ADMIN_DELETE in current_user.scopes or PropertyScope.ADMIN in current_user.scopes
+    if is_admin:
         deleted = await property_crud.admin_delete_property(property_id)
     else:
         deleted = await property_crud.delete_property(

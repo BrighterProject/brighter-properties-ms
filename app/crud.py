@@ -273,9 +273,12 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         return PropertyResponse.model_validate(inst, from_attributes=True)
 
     async def update_property(
-        self, property_id: UUID, payload: PropertyUpdate, owner_id: UUID
+        self, property_id: UUID, payload: PropertyUpdate, owner_id: UUID | None = None
     ) -> PropertyResponse | None:
-        inst = await Property.get_or_none(id=property_id, owner_id=owner_id)
+        filters: dict = {"id": property_id}
+        if owner_id:
+            filters["owner_id"] = owner_id
+        inst = await Property.get_or_none(**filters)
         if not inst:
             return None
 
