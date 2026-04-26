@@ -6,6 +6,7 @@ from uuid import UUID
 import httpx
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from loguru import logger
 
 from app import settings
 from app.scopes import PROPERTY_SCOPE_DESCRIPTIONS, PropertyScope
@@ -232,6 +233,7 @@ class NotificationsClient:
         self, *, to: str, notification_type: str, data: dict | None = None
     ) -> None:
         try:
+            logger.debug("Sending notification from properties-ms | type={} to={} data={}", notification_type, to, data)
             await self._client.post(
                 "/notifications/dispatch",
                 json={
@@ -242,8 +244,9 @@ class NotificationsClient:
                 },
                 headers=self._headers(),
             )
-        except Exception:
-            pass
+            logger.debug("Successfully sent notification from properties-ms | type={} to={}", notification_type, to)
+        except Exception as exc:
+            logger.error("Failed to send notification from properties-ms | type={} to={} error={}", notification_type, to, exc)
 
 
 _notifications_client = NotificationsClient()
