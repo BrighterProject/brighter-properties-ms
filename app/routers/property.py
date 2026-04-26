@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated
 from uuid import UUID
 
@@ -6,9 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from app.crud import property_crud, property_image_crud, property_translation_crud
 from app.deps import (
     CurrentUser,
+    NotificationsClient,
+    UsersClient,
     can_admin_write,
     can_delete_or_admin,
     can_write_or_admin,
+    get_notifications_client,
+    get_users_client,
 )
 from app.limiter import limiter
 from app.schemas import (
@@ -16,6 +21,7 @@ from app.schemas import (
     PropertyFilters,
     PropertyListItem,
     PropertyResponse,
+    PropertyStatus,
     PropertyStatusUpdate,
     PropertyUpdate,
 )
@@ -118,18 +124,38 @@ async def update_property(
 @router.patch(
     "/{property_id}/status",
     response_model=PropertyResponse,
-    dependencies=[Depends(can_admin_write)],
 )
 @limiter.limit("60/minute")
 async def update_property_status(
-    request: Request, property_id: UUID, payload: PropertyStatusUpdate
+    request: Request,
+    property_id: UUID,
+    payload: PropertyStatusUpdate,
+    _: CurrentUser = Depends(can_admin_write),
+    users_client: UsersClient = Depends(get_users_client),
+    notifications_client: NotificationsClient = Depends(get_notifications_client),
 ):
     property = await property_crud.update_status(property_id, payload)
     if not property:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Property not found"
         )
+
+    if payload.status == PropertyStatus.ACTIVE:
+        asyncio.create_task(
+            _notify_property_approved(property, users_client, notifications_client)
+        )
+
     return property
+
+
+async def _notify_property_approved(property, users_client: UsersClient, nc: NotificationsClient) -> None:
+    owner_email = await users_client.get_email(property.owner_id)
+    if not owner_email:
+        return
+    await nc.send(
+        to=owner_email,
+        notification_type="property_approved",
+    )
 
 
 @router.delete("/{property_id}", status_code=status.HTTP_204_NO_CONTENT)
