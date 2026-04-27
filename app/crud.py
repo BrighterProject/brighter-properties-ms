@@ -56,8 +56,8 @@ async def _get_booked_property_ids(from_date: date, to_date: date) -> list[UUID]
         )
         if resp.status_code == 200:
             return [UUID(pid) for pid in resp.json()]
-    except (httpx.RequestError, ValueError):
-        pass
+    except (httpx.RequestError, ValueError) as exc:
+        logger.warning("failed to fetch booked property IDs from bookings-ms — {}", exc)
     return []
 
 

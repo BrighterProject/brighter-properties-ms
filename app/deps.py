@@ -190,8 +190,8 @@ class UsersClient:
             resp = await self._client.get(f"/users/{user_id}", headers=self._headers())
             if resp.status_code == 200:
                 return resp.json().get("email")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("UsersClient: failed to fetch email for user {} — {}", user_id, exc)
         return None
 
 
