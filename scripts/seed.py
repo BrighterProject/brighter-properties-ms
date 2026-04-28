@@ -11,6 +11,9 @@ import asyncio
 import sys
 import uuid
 from decimal import Decimal
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tortoise import Tortoise
 
@@ -21,7 +24,7 @@ DB_URL = __import__("os").environ.get(
 MODELS = ["app.models", "aerich.models"]
 
 # Fixed seed owner UUID — a placeholder owner for fixture properties.
-SEED_OWNER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+SEED_OWNER_ID = uuid.UUID("b42ebeec-727b-47a1-aec9-93e214ecf837")
 
 FIXTURES = [
     {
@@ -35,8 +38,16 @@ FIXTURES = [
         "bathrooms": 1,
         "beds": 2,
         "rooms": [
-            {"room_type": "bedroom", "count": 1, "beds": [{"bed_type": "double", "count": 1}]},
-            {"room_type": "living_room", "count": 1, "beds": [{"bed_type": "sofa_bed", "count": 1}]},
+            {
+                "room_type": "bedroom",
+                "count": 1,
+                "beds": [{"bed_type": "double", "count": 1}],
+            },
+            {
+                "room_type": "living_room",
+                "count": 1,
+                "beds": [{"bed_type": "sofa_bed", "count": 1}],
+            },
             {"room_type": "bathroom", "count": 1},
             {"room_type": "kitchen", "count": 1},
         ],
@@ -54,7 +65,7 @@ FIXTURES = [
                 "locale": "bg",
                 "name": "Луксозен апартамент в центъра на София",
                 "description": (
-                    "Просторен двустаен апартамент на 5 минути от НДК. "
+                    "Просторен двустаен апартамент на 5 минути от НДК.\n\n"
                     "Напълно оборудвана кухня, бързи Wi-Fi и панорамна гледка към Витоша."
                 ),
                 "address": "бул. Витоша 15, София 1000",
@@ -63,7 +74,7 @@ FIXTURES = [
                 "locale": "en",
                 "name": "Luxury Apartment in Sofia City Center",
                 "description": (
-                    "Spacious 2-bedroom apartment 5 minutes from the NDK. "
+                    "Spacious 2-bedroom apartment 5 minutes from the NDK.\n\n"
                     "Fully equipped kitchen, fast Wi-Fi, and a panoramic view of Vitosha."
                 ),
                 "address": "15 Vitosha Blvd, Sofia 1000",
@@ -93,13 +104,27 @@ FIXTURES = [
         "bathrooms": 2,
         "beds": 5,
         "rooms": [
-            {"room_type": "bedroom", "count": 4, "beds": [{"bed_type": "double", "count": 3}, {"bed_type": "single", "count": 2}]},
+            {
+                "room_type": "bedroom",
+                "count": 4,
+                "beds": [
+                    {"bed_type": "double", "count": 3},
+                    {"bed_type": "single", "count": 2},
+                ],
+            },
             {"room_type": "living_room", "count": 1},
             {"room_type": "bathroom", "count": 2},
             {"room_type": "kitchen", "count": 1},
         ],
         "has_parking": True,
-        "amenities": ["wifi", "fireplace", "kitchen", "bbq", "mountain_view", "ski_storage"],
+        "amenities": [
+            "wifi",
+            "fireplace",
+            "kitchen",
+            "bbq",
+            "mountain_view",
+            "ski_storage",
+        ],
         "check_in_time": "14:00",
         "check_out_time": "12:00",
         "min_nights": 3,
@@ -112,8 +137,8 @@ FIXTURES = [
                 "locale": "bg",
                 "name": "Ски вила с камина в Банско",
                 "description": (
-                    "Четири спални вила с невероятна гледка към Пирин. "
-                    "Камина, напълно оборудвана кухня и паркинг. "
+                    "Четири спални вила с невероятна гледка към Пирин.\n\n"
+                    "Камина, напълно оборудвана кухня и паркинг.\n"
                     "На 300м от пистите."
                 ),
                 "address": "ул. Пирин 42, Банско 2770",
@@ -122,8 +147,8 @@ FIXTURES = [
                 "locale": "en",
                 "name": "Ski Villa with Fireplace in Bansko",
                 "description": (
-                    "Four-bedroom villa with stunning views of Pirin mountain. "
-                    "Fireplace, fully equipped kitchen, and private parking. "
+                    "Four-bedroom villa with stunning views of Pirin mountain.\n\n"
+                    "Fireplace, fully equipped kitchen, and private parking.\n"
                     "300m from the ski slopes."
                 ),
                 "address": "42 Pirin St, Bansko 2770",
@@ -153,11 +178,20 @@ FIXTURES = [
         "bathrooms": 1,
         "beds": 1,
         "rooms": [
-            {"room_type": "bedroom", "count": 1, "beds": [{"bed_type": "double", "count": 1}]},
+            {
+                "room_type": "bedroom",
+                "count": 1,
+                "beds": [{"bed_type": "double", "count": 1}],
+            },
             {"room_type": "bathroom", "count": 1},
         ],
         "has_parking": True,
-        "amenities": ["wifi", "breakfast_included", "air_conditioning", "reception_24h"],
+        "amenities": [
+            "wifi",
+            "breakfast_included",
+            "air_conditioning",
+            "reception_24h",
+        ],
         "check_in_time": "13:00",
         "check_out_time": "12:00",
         "min_nights": 1,
@@ -170,8 +204,8 @@ FIXTURES = [
                 "locale": "bg",
                 "name": "Бутиков хотел в Стария град на Пловдив",
                 "description": (
-                    "Уютен бутиков хотел в сърцето на Стария град. "
-                    "Включена закуска, безплатен паркинг и 24-часова рецепция. "
+                    "Уютен бутиков хотел в сърцето на Стария град.\n\n"
+                    "Включена закуска, безплатен паркинг и 24-часова рецепция.\n"
                     "На крачка от Главната улица."
                 ),
                 "address": "ул. Княз Церетелев 3, Пловдив 4000",
@@ -180,8 +214,8 @@ FIXTURES = [
                 "locale": "en",
                 "name": "Boutique Hotel in Plovdiv Old Town",
                 "description": (
-                    "Cozy boutique hotel in the heart of the Old Town. "
-                    "Breakfast included, free parking, and 24-hour reception. "
+                    "Cozy boutique hotel in the heart of the Old Town.\n\n"
+                    "Breakfast included, free parking, and 24-hour reception.\n"
                     "Steps from the main pedestrian street."
                 ),
                 "address": "3 Knyaz Tseretelev St, Plovdiv 4000",
@@ -206,13 +240,27 @@ FIXTURES = [
         "bathrooms": 2,
         "beds": 4,
         "rooms": [
-            {"room_type": "bedroom", "count": 3, "beds": [{"bed_type": "double", "count": 2}, {"bed_type": "single", "count": 2}]},
+            {
+                "room_type": "bedroom",
+                "count": 3,
+                "beds": [
+                    {"bed_type": "double", "count": 2},
+                    {"bed_type": "single", "count": 2},
+                ],
+            },
             {"room_type": "living_room", "count": 1},
             {"room_type": "bathroom", "count": 2},
             {"room_type": "kitchen", "count": 1},
         ],
         "has_parking": True,
-        "amenities": ["wifi", "sea_view", "air_conditioning", "kitchen", "balcony", "pool"],
+        "amenities": [
+            "wifi",
+            "sea_view",
+            "air_conditioning",
+            "kitchen",
+            "balcony",
+            "pool",
+        ],
         "check_in_time": "15:00",
         "check_out_time": "11:00",
         "min_nights": 3,
@@ -225,8 +273,8 @@ FIXTURES = [
                 "locale": "bg",
                 "name": "Апартамент с морска гледка — Варна Бийч",
                 "description": (
-                    "Просторен тристаен апартамент с директна гледка към Черно море. "
-                    "Балкон, достъп до басейн и паркинг. "
+                    "Просторен тристаен апартамент с директна гледка към Черно море.\n\n"
+                    "Балкон, достъп до басейн и паркинг.\n"
                     "На 100м от плажа."
                 ),
                 "address": "к.к. Чайка, бл. 12, ет. 8, Варна 9000",
@@ -235,8 +283,8 @@ FIXTURES = [
                 "locale": "en",
                 "name": "Sea-View Apartment — Varna Beach",
                 "description": (
-                    "Spacious 3-bedroom apartment with direct Black Sea views. "
-                    "Balcony, pool access, and private parking. "
+                    "Spacious 3-bedroom apartment with direct Black Sea views.\n\n"
+                    "Balcony, pool access, and private parking.\n"
                     "100m from the beach."
                 ),
                 "address": "Chaika Resort, Block 12, Floor 8, Varna 9000",
@@ -266,13 +314,27 @@ FIXTURES = [
         "bathrooms": 2,
         "beds": 6,
         "rooms": [
-            {"room_type": "bedroom", "count": 4, "beds": [{"bed_type": "double", "count": 2}, {"bed_type": "single", "count": 4}]},
+            {
+                "room_type": "bedroom",
+                "count": 4,
+                "beds": [
+                    {"bed_type": "double", "count": 2},
+                    {"bed_type": "single", "count": 4},
+                ],
+            },
             {"room_type": "living_room", "count": 1},
             {"room_type": "bathroom", "count": 2},
             {"room_type": "kitchen", "count": 1},
         ],
         "has_parking": True,
-        "amenities": ["wifi", "garden", "bbq", "kitchen", "washing_machine", "pet_friendly"],
+        "amenities": [
+            "wifi",
+            "garden",
+            "bbq",
+            "kitchen",
+            "washing_machine",
+            "pet_friendly",
+        ],
         "check_in_time": "14:00",
         "check_out_time": "12:00",
         "min_nights": 2,
@@ -285,8 +347,8 @@ FIXTURES = [
                 "locale": "bg",
                 "name": "Просторна къща с градина в Пловдив",
                 "description": (
-                    "Четири спални самостоятелна къща с голяма градина и барбекю. "
-                    "Подходяща за семейни събирания и корпоративни отстъпления. "
+                    "Четири спални самостоятелна къща с голяма градина и барбекю.\n\n"
+                    "Подходяща за семейни събирания и корпоративни отстъпления.\n"
                     "Домашни любимци са добре дошли."
                 ),
                 "address": "ул. Рожен 8, Пловдив 4000",
@@ -295,8 +357,8 @@ FIXTURES = [
                 "locale": "en",
                 "name": "Spacious Garden House in Plovdiv",
                 "description": (
-                    "Four-bedroom standalone house with a large garden and BBQ. "
-                    "Perfect for family gatherings and corporate retreats. "
+                    "Four-bedroom standalone house with a large garden and BBQ.\n\n"
+                    "Perfect for family gatherings and corporate retreats.\n"
                     "Pets are welcome."
                 ),
                 "address": "8 Rozhen St, Plovdiv 4000",
@@ -321,7 +383,11 @@ FIXTURES = [
         "bathrooms": 1,
         "beds": 1,
         "rooms": [
-            {"room_type": "studio", "count": 1, "beds": [{"bed_type": "double", "count": 1}]},
+            {
+                "room_type": "studio",
+                "count": 1,
+                "beds": [{"bed_type": "double", "count": 1}],
+            },
             {"room_type": "bathroom", "count": 1},
         ],
         "has_parking": False,
@@ -338,8 +404,8 @@ FIXTURES = [
                 "locale": "bg",
                 "name": "Уютно студио до Националния театър, София",
                 "description": (
-                    "Компактно и добре обзаведено студио на крачка от Националния театър. "
-                    "Идеално за бизнес пътувания и кратки почивки. "
+                    "Компактно и добре обзаведено студио на крачка от Националния театър.\n\n"
+                    "Идеално за бизнес пътувания и кратки почивки.\n"
                     "Включен бърз Wi-Fi."
                 ),
                 "address": "ул. Раковски 101, София 1000",
@@ -348,8 +414,8 @@ FIXTURES = [
                 "locale": "en",
                 "name": "Cozy Studio near National Theatre, Sofia",
                 "description": (
-                    "Compact and well-furnished studio steps from the National Theatre. "
-                    "Ideal for business trips and short breaks. "
+                    "Compact and well-furnished studio steps from the National Theatre.\n\n"
+                    "Ideal for business trips and short breaks.\n"
                     "Fast Wi-Fi included."
                 ),
                 "address": "101 Rakovski St, Sofia 1000",
@@ -373,8 +439,14 @@ async def seed(force: bool = False) -> None:
 
     existing = await Property.filter(status="active").count()
     if existing > 0 and not force:
-        print(f"[seed] {existing} active properties already exist — skipping (use --force to override)")
+        print(
+            f"[seed] {existing} active properties already exist — skipping (use --force to override)"
+        )
         return
+
+    if force and existing > 0:
+        deleted = await Property.filter(owner_id=SEED_OWNER_ID).delete()
+        print("[seed] Deleted existing seed properties")
 
     created = 0
     for fixture in FIXTURES:

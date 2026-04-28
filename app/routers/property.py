@@ -32,7 +32,6 @@ router = APIRouter(prefix="/properties", tags=["properties"])
 
 
 @router.get("/items/")
-# Используем Annotated и Query() для привязки модели к query-параметрам
 async def read_items(filter_query: Annotated[PropertyFilters, Query()]):
     return filter_query
 
@@ -100,7 +99,10 @@ async def update_property(
     payload: PropertyUpdate,
     current_user: CurrentUser = Depends(can_write_or_admin),
 ):
-    is_admin = PropertyScope.ADMIN_WRITE in current_user.scopes or PropertyScope.ADMIN in current_user.scopes
+    is_admin = (
+        PropertyScope.ADMIN_WRITE in current_user.scopes
+        or PropertyScope.ADMIN in current_user.scopes
+    )
     updated = await property_crud.update_property(
         property_id, payload, owner_id=None if is_admin else current_user.id
     )
@@ -114,7 +116,9 @@ async def update_property(
     if payload.images is not None:
         await property_image_crud.replace_for_property(property_id, payload.images)
     if payload.translations is not None:
-        await property_translation_crud.upsert_for_property(property_id, payload.translations)
+        await property_translation_crud.upsert_for_property(
+            property_id, payload.translations
+        )
 
     if payload.images is not None or payload.translations is not None:
         return await property_crud.get_property(property_id)
@@ -148,7 +152,9 @@ async def update_property_status(
     return property
 
 
-async def _notify_property_approved(property, users_client: UsersClient, nc: NotificationsClient) -> None:
+async def _notify_property_approved(
+    property, users_client: UsersClient, nc: NotificationsClient
+) -> None:
     owner_email = await users_client.get_email(property.owner_id)
     if not owner_email:
         return
@@ -165,7 +171,10 @@ async def delete_property(
     property_id: UUID,
     current_user: CurrentUser = Depends(can_delete_or_admin),
 ):
-    is_admin = PropertyScope.ADMIN_DELETE in current_user.scopes or PropertyScope.ADMIN in current_user.scopes
+    is_admin = (
+        PropertyScope.ADMIN_DELETE in current_user.scopes
+        or PropertyScope.ADMIN in current_user.scopes
+    )
     if is_admin:
         deleted = await property_crud.admin_delete_property(property_id)
     else:
