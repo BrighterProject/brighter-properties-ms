@@ -272,7 +272,7 @@ class PropertyTranslationCRUD(CRUD[PropertyTranslation, TranslationResponse]):  
 # Property CRUD
 # ---------------------------------------------------------------------------
 
-PREFETCH = ("images", "unavailabilities", "translations")
+PREFETCH = ("images", "unavailabilities", "translations", "weekday_prices", "date_price_overrides")
 
 
 class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore

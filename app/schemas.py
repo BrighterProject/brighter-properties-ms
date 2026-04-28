@@ -344,6 +344,8 @@ class PropertyResponse(PropertyBase):
     translations: list[TranslationResponse] = Field(default_factory=list)
     images: list[PropertyImageResponse] = Field(default_factory=list)
     unavailabilities: list[PropertyUnavailabilityResponse] = Field(default_factory=list)
+    weekday_prices: list[WeekdayPriceOut] = Field(default_factory=list)
+    date_price_overrides: list[DatePriceOverrideOut] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
