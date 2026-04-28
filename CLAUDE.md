@@ -60,11 +60,21 @@ app/
     translations.py    # /properties/{id}/translations
     images.py          # /properties/{id}/images
     unavail.py         # /properties/{id}/unavailabilities
+    pricing.py         # /properties/{id}/pricing — weekday prices, date overrides, price resolve
 tests/
   conftest.py          # Fixtures: owner_client, admin_client, anon_app, client_factory
   factories.py         # make_user(), make_admin(), property_create_payload(), etc.
   test_*.py            # One file per router + edge cases + schemas + scopes
 ```
+
+## Pseudo-dynamic pricing
+
+Models: `PropertyWeekdayPrice` (0=Mon…6=Sun), `PropertyDatePriceOverride` (date range + optional label).
+Router: `app/routers/pricing.py` — prefix `/properties/{property_id}/pricing`.
+Auth: public GETs; mutations require `properties:schedule` scope (owner) or `admin:properties:write` (admin).
+Priority: date override › weekday › base price.
+Resolution: `GET /pricing/resolve?start_date=&end_date=` returns per-night breakdown with source field (`base` | `weekday` | `date_override`).
+Tested in `tests/test_pricing_router.py` and `tests/test_price_resolver.py`.
 
 ## ms-core
 
