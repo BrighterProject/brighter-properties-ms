@@ -372,6 +372,79 @@ class PropertyListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ---------------------------------------------------------------------------
+# Pricing schemas
+# ---------------------------------------------------------------------------
+
+
+class WeekdayPriceIn(BaseModel):
+    weekday: int = Field(..., ge=0, le=6, description="0=Monday … 6=Sunday")
+    price: Decimal = Field(..., ge=0, decimal_places=2)
+
+
+class WeekdayPriceOut(WeekdayPriceIn):
+    id: UUID
+    property_id: UUID
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DatePriceOverrideIn(BaseModel):
+    start_date: date
+    end_date: date
+    price: Decimal = Field(..., ge=0, decimal_places=2)
+    label: str | None = Field(default=None, max_length=100)
+
+    @model_validator(mode="after")
+    def end_on_or_after_start(self) -> "DatePriceOverrideIn":
+        if self.end_date < self.start_date:
+            raise ValueError("end_date must be >= start_date")
+        return self
+
+
+class DatePriceOverrideUpdate(BaseModel):
+    start_date: date | None = None
+    end_date: date | None = None
+    price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    label: str | None = Field(default=None, max_length=100)
+
+    @model_validator(mode="after")
+    def end_on_or_after_start(self) -> "DatePriceOverrideUpdate":
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValueError("end_date must be >= start_date")
+        return self
+
+
+class DatePriceOverrideOut(BaseModel):
+    id: UUID
+    property_id: UUID
+    start_date: date
+    end_date: date
+    price: Decimal
+    label: str | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PriceSource(StrEnum):
+    BASE = "base"
+    WEEKDAY = "weekday"
+    DATE_OVERRIDE = "date_override"
+
+
+class ResolvedNightPrice(BaseModel):
+    date: date
+    price: Decimal
+    source: PriceSource
+    label: str | None = None
+
+
+class PriceResolutionResponse(BaseModel):
+    currency: str
+    nights: list[ResolvedNightPrice]
+    total: Decimal
+
+
 class PropertyFilters(BaseModel):
     """Bind to a FastAPI route via Depends(PropertyFilters)."""
 

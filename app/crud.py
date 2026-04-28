@@ -14,8 +14,18 @@ from app import settings
 from app.deps import CurrentUser
 from app.scopes import PropertyScope
 
-from .models import Property, PropertyImage, PropertyTranslation, PropertyUnavailability
+from .models import (
+    Property,
+    PropertyDatePriceOverride,
+    PropertyImage,
+    PropertyTranslation,
+    PropertyUnavailability,
+    PropertyWeekdayPrice,
+)
 from .schemas import (
+    DatePriceOverrideIn,
+    DatePriceOverrideOut,
+    DatePriceOverrideUpdate,
     PropertyCreate,
     PropertyFilters,
     PropertyImageCreate,
@@ -32,6 +42,8 @@ from .schemas import (
     TranslationCreate,
     TranslationResponse,
     TranslationUpdate,
+    WeekdayPriceIn,
+    WeekdayPriceOut,
 )
 
 FALLBACK_NAME = "Untitled"
@@ -450,6 +462,78 @@ property_unavailability_crud = PropertyUnavailabilityCRUD(
 property_translation_crud = PropertyTranslationCRUD(
     PropertyTranslation, TranslationResponse
 )
+
+
+# ---------------------------------------------------------------------------
+# Weekday pricing CRUD
+# ---------------------------------------------------------------------------
+
+
+class WeekdayPriceCRUD(CRUD[PropertyWeekdayPrice, WeekdayPriceOut]):  # type: ignore
+    async def list_for_property(self, property_id: UUID) -> list[WeekdayPriceOut]:
+        items = await PropertyWeekdayPrice.filter(property_id=property_id).order_by("weekday")
+        return [WeekdayPriceOut.model_validate(i, from_attributes=True) for i in items]
+
+    async def upsert_all(
+        self, property_id: UUID, rules: list[WeekdayPriceIn]
+    ) -> list[WeekdayPriceOut]:
+        """Atomically replace all weekday prices for a property."""
+        await PropertyWeekdayPrice.filter(property_id=property_id).delete()
+        created = []
+        for rule in rules:
+            inst = await PropertyWeekdayPrice.create(
+                property_id=property_id,
+                weekday=rule.weekday,
+                price=rule.price,
+            )
+            created.append(inst)
+        created.sort(key=lambda x: x.weekday)
+        return [WeekdayPriceOut.model_validate(i, from_attributes=True) for i in created]
+
+
+# ---------------------------------------------------------------------------
+# Date override CRUD
+# ---------------------------------------------------------------------------
+
+
+class DatePriceOverrideCRUD(CRUD[PropertyDatePriceOverride, DatePriceOverrideOut]):  # type: ignore
+    async def list_for_property(
+        self,
+        property_id: UUID,
+        from_date: date | None = None,
+        to_date: date | None = None,
+    ) -> list[DatePriceOverrideOut]:
+        qs = PropertyDatePriceOverride.filter(property_id=property_id)
+        if from_date:
+            qs = qs.filter(end_date__gte=from_date)
+        if to_date:
+            qs = qs.filter(start_date__lte=to_date)
+        items = await qs.order_by("start_date", "created_at")
+        return [DatePriceOverrideOut.model_validate(i, from_attributes=True) for i in items]
+
+    async def create_for_property(
+        self, property_id: UUID, payload: DatePriceOverrideIn
+    ) -> DatePriceOverrideOut:
+        inst = await PropertyDatePriceOverride.create(
+            property_id=property_id, **payload.model_dump()
+        )
+        return DatePriceOverrideOut.model_validate(inst, from_attributes=True)
+
+    async def update(
+        self, override_id: UUID, property_id: UUID, payload: DatePriceOverrideUpdate
+    ) -> DatePriceOverrideOut | None:
+        inst = await PropertyDatePriceOverride.get_or_none(id=override_id, property_id=property_id)
+        if not inst:
+            return None
+        await inst.update_from_dict(payload.model_dump(exclude_none=True)).save()
+        return DatePriceOverrideOut.model_validate(inst, from_attributes=True)
+
+    async def delete(self, override_id: UUID, property_id: UUID) -> bool:
+        return await self.delete_by(id=override_id, property_id=property_id)
+
+
+weekday_price_crud = WeekdayPriceCRUD(PropertyWeekdayPrice, WeekdayPriceOut)
+date_override_crud = DatePriceOverrideCRUD(PropertyDatePriceOverride, DatePriceOverrideOut)
 
 
 async def assert_owns_property(property_id: UUID, current_user: CurrentUser) -> None:
