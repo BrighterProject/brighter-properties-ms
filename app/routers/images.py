@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 
 from app.crud import assert_owns_property, property_image_crud
 from app.deps import (
@@ -13,6 +13,7 @@ from app.schemas import (
     PropertyImageResponse,
     PropertyImageUpdate,
 )
+from app.storage import upload_image
 
 router = APIRouter(prefix="/properties/{property_id}/images", tags=["Property Images"])
 
@@ -36,6 +37,30 @@ async def add_image(
     current_user: CurrentUser = Depends(can_images_or_admin),
 ):
     await assert_owns_property(property_id, current_user)
+    return await property_image_crud.create_for_property(property_id, payload)
+
+
+@router.post(
+    "/upload",
+    response_model=PropertyImageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit("30/minute")
+async def upload_image_file(
+    request: Request,
+    property_id: UUID,
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(can_images_or_admin),
+):
+    await assert_owns_property(property_id, current_user)
+    url = await upload_image(file)
+    images = await property_image_crud.list_for_property(property_id)
+    has_thumbnail = any(img.is_thumbnail for img in images)
+    payload = PropertyImageCreate(
+        url=url,
+        is_thumbnail=not has_thumbnail,
+        order=len(images),
+    )
     return await property_image_crud.create_for_property(property_id, payload)
 
 
