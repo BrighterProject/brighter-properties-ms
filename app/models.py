@@ -97,9 +97,9 @@ class Property(Model):
 
     # Gap filler
     enable_gap_filler = fields.BooleanField(default=False)
-    gap_premium_pct = fields.DecimalField(max_digits=5, decimal_places=2, default=0)  # 0–100 percent
+    gap_tax_pct = fields.DecimalField(max_digits=5, decimal_places=2, default=0)  # -100–100 percent
     gap_last_minute_window = fields.IntField(default=7)  # days from today
-    gap_adjacent_only = fields.BooleanField(default=True)  # requires bookings on both sides
+    gap_adjacent_only = fields.BooleanField(default=True)  # legacy: always True
 
     # Meta
     rating = fields.DecimalField(max_digits=3, decimal_places=2, default=0.0)

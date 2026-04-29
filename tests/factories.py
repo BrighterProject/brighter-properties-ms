@@ -188,7 +188,7 @@ def property_response(**overrides) -> dict:
         max_nights=30,
         cancellation_policy="moderate",
         enable_gap_filler=False,
-        gap_premium_pct="0.00",
+        gap_tax_pct="0.00",
         gap_last_minute_window=7,
         gap_adjacent_only=True,
         rating="4.50",

@@ -26,7 +26,7 @@ class TestGapFillerDefaults:
         created = PropertyResponse(
             **property_response(
                 enable_gap_filler=False,
-                gap_premium_pct="0.00",
+                gap_tax_pct="0.00",
                 gap_last_minute_window=7,
                 gap_adjacent_only=True,
             )
@@ -52,14 +52,14 @@ class TestGapFillerDefaults:
         """Creating a property with gap filler enabled should return those values."""
         payload = property_create_payload(
             enable_gap_filler=True,
-            gap_premium_pct="15.00",
+            gap_tax_pct="15.00",
             gap_last_minute_window=14,
             gap_adjacent_only=False,
         )
         created = PropertyResponse(
             **property_response(
                 enable_gap_filler=True,
-                gap_premium_pct="15.00",
+                gap_tax_pct="15.00",
                 gap_last_minute_window=14,
                 gap_adjacent_only=False,
             )
@@ -78,6 +78,6 @@ class TestGapFillerDefaults:
         assert resp.status_code == 201
         data = resp.json()
         assert data["enable_gap_filler"] is True
-        assert float(data["gap_premium_pct"]) == 15.00
+        assert float(data["gap_tax_pct"]) == 15.00
         assert data["gap_last_minute_window"] == 14
         assert data["gap_adjacent_only"] is False

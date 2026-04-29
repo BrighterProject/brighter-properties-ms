@@ -224,7 +224,7 @@ class PropertyBase(BaseModel):
 
     # Gap filler
     enable_gap_filler: bool = False
-    gap_premium_pct: Decimal = Field(default=Decimal("0"), ge=Decimal("0"), le=Decimal("100"))
+    gap_tax_pct: Decimal = Field(default=Decimal("0"), ge=Decimal("-100"), le=Decimal("100"))
     gap_last_minute_window: int = Field(default=7, ge=1, le=90)
     gap_adjacent_only: bool = True
 
@@ -302,7 +302,7 @@ class PropertyUpdate(BaseModel):
 
     # Gap filler
     enable_gap_filler: bool | None = None
-    gap_premium_pct: Decimal | None = Field(default=None, ge=0, le=100, decimal_places=2)
+    gap_tax_pct: Decimal | None = Field(default=None, ge=-100, le=100, decimal_places=2)
     gap_last_minute_window: int | None = Field(default=None, ge=1, le=90)
     gap_adjacent_only: bool | None = None
 
