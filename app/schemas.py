@@ -222,6 +222,12 @@ class PropertyBase(BaseModel):
     # Policy
     cancellation_policy: CancellationPolicy = CancellationPolicy.MODERATE
 
+    # Gap filler
+    enable_gap_filler: bool = False
+    gap_premium_pct: Decimal = Decimal("0")
+    gap_last_minute_window: int = Field(default=7, ge=1, le=90)
+    gap_adjacent_only: bool = True
+
     @field_validator("currency", mode="before")
     @classmethod
     def uppercase_currency(cls, v: Any) -> Any:
@@ -293,6 +299,12 @@ class PropertyUpdate(BaseModel):
     max_nights: int | None = Field(default=None, ge=1)
 
     cancellation_policy: CancellationPolicy | None = None
+
+    # Gap filler
+    enable_gap_filler: bool | None = None
+    gap_premium_pct: Decimal | None = Field(default=None, ge=0, le=100, decimal_places=2)
+    gap_last_minute_window: int | None = Field(default=None, ge=1, le=90)
+    gap_adjacent_only: bool | None = None
 
     # Locale-keyed translation upserts (locale → partial fields).
     # Existing translations are updated; missing locales are created if

@@ -187,12 +187,18 @@ def property_response(**overrides) -> dict:
         min_nights=1,
         max_nights=30,
         cancellation_policy="moderate",
+        enable_gap_filler=False,
+        gap_premium_pct="0.00",
+        gap_last_minute_window=7,
+        gap_adjacent_only=True,
         rating="4.50",
         total_reviews=10,
         updated_at=NOW.isoformat(),
         translations=[translation_response("bg")],
         images=[],
         unavailabilities=[],
+        weekday_prices=[],
+        date_price_overrides=[],
     )
     return {**base, **overrides}
 
