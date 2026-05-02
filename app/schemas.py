@@ -192,7 +192,9 @@ class PropertyBase(BaseModel):
     property_type: PropertyType = PropertyType.APARTMENT
 
     # Location
-    city: str = Field(..., max_length=100)
+    region_code: str | None = Field(default=None, max_length=10)
+    settlement_ekatte: str | None = Field(default=None, max_length=10)
+    city: str | None = Field(default=None, max_length=100)  # legacy; derived from settlement on read
     latitude: Decimal | None = Field(default=None, ge=-90, le=90, decimal_places=6)
     longitude: Decimal | None = Field(default=None, ge=-180, le=180, decimal_places=6)
 
@@ -255,6 +257,9 @@ class PropertyCreate(PropertyBase):
     Must include at least one translation.
     """
 
+    region_code: str = Field(..., max_length=10)
+    settlement_ekatte: str = Field(..., max_length=10)
+
     translations: list[TranslationCreate] = Field(..., min_length=1)
     images: list[PropertyImageCreate] = Field(default_factory=list)
 
@@ -276,6 +281,8 @@ class PropertyUpdate(BaseModel):
 
     property_type: PropertyType | None = None
 
+    region_code: str | None = Field(default=None, max_length=10)
+    settlement_ekatte: str | None = Field(default=None, max_length=10)
     city: str | None = Field(default=None, max_length=100)
     latitude: Decimal | None = Field(default=None, ge=-90, le=90)
     longitude: Decimal | None = Field(default=None, ge=-180, le=180)
@@ -371,7 +378,9 @@ class PropertyListItem(BaseModel):
     id: UUID
     name: str  # resolved from translations for the requested locale
     description: str  # resolved from translations for the requested locale
-    city: str
+    region_code: str | None
+    settlement_ekatte: str | None
+    city: str | None  # resolved settlement name in requested locale
     property_type: PropertyType
     status: PropertyStatus
     price_per_night: Decimal
@@ -462,7 +471,9 @@ class PriceResolutionResponse(BaseModel):
 class PropertyFilters(BaseModel):
     """Bind to a FastAPI route via Depends(PropertyFilters)."""
 
-    city: str | None = None
+    region_code: str | None = None
+    settlement_ekatte: str | None = None
+    city: str | None = None  # legacy text search fallback
     property_type: list[PropertyType] | None = Field(default=None)
     has_parking: bool | None = None
     free_cancellation: bool | None = None

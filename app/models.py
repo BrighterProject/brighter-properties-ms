@@ -61,7 +61,9 @@ class Property(Model):
     owner_id = fields.UUIDField()
 
     # Location (non-translatable)
-    city = fields.CharField(max_length=100)
+    region_code = fields.CharField(max_length=10, null=True)       # oblast code e.g. "SFO"
+    settlement_ekatte = fields.CharField(max_length=10, null=True)  # EKATTE code e.g. "68134"
+    city = fields.CharField(max_length=100, null=True)              # legacy; kept for old data
     latitude = fields.DecimalField(max_digits=9, decimal_places=6, null=True)
     longitude = fields.DecimalField(max_digits=9, decimal_places=6, null=True)
 

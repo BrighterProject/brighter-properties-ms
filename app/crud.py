@@ -12,6 +12,7 @@ from tortoise.expressions import Q
 
 from app import settings
 from app.deps import CurrentUser
+from app.regions import resolve_city_name
 from app.scopes import PropertyScope
 
 from .models import (
@@ -358,7 +359,9 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                     id=v.id,
                     name=tr.name if tr else FALLBACK_NAME,
                     description=tr.description if tr else "",
-                    city=v.city,
+                    region_code=v.region_code,
+                    settlement_ekatte=v.settlement_ekatte,
+                    city=resolve_city_name(v.settlement_ekatte, locale) or v.city,
                     property_type=v.property_type,
                     status=PropertyStatus(v.status),
                     price_per_night=v.price_per_night,
@@ -380,6 +383,10 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
 
         if filters.status is not None:
             qs = qs.filter(status=filters.status)
+        if filters.region_code is not None:
+            qs = qs.filter(region_code=filters.region_code)
+        if filters.settlement_ekatte is not None:
+            qs = qs.filter(settlement_ekatte=filters.settlement_ekatte)
         if filters.city is not None:
             qs = qs.filter(city__icontains=filters.city)
         if filters.property_type is not None:
@@ -438,7 +445,9 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                     id=v.id,
                     name=tr.name if tr else FALLBACK_NAME,
                     description=tr.description if tr else "",
-                    city=v.city,
+                    region_code=v.region_code,
+                    settlement_ekatte=v.settlement_ekatte,
+                    city=resolve_city_name(v.settlement_ekatte, locale) or v.city,
                     property_type=v.property_type,
                     status=PropertyStatus(v.status),
                     price_per_night=v.price_per_night,
