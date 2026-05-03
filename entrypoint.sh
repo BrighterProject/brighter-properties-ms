@@ -10,7 +10,7 @@ if [ -z "$FORWARDED_ALLOW_IPS" ]; then
 fi
 
 # echo "Running database migrations..."
-# uv run aerich upgrade
+# uv run tortoise -c main.TORTOISE_ORM migrate
 
 exec uv run uvicorn main:application \
     --host 0.0.0.0 \

@@ -2,6 +2,7 @@ from enum import StrEnum
 
 from ms_core import AbstractModel as Model
 from tortoise import fields
+from tortoise.contrib.postgres.fields import TSVectorField
 
 
 class PropertyType(StrEnum):
@@ -138,6 +139,7 @@ class PropertyTranslation(Model):
     description = fields.TextField()
     address = fields.CharField(max_length=500)
     house_rules = fields.TextField(null=True)
+    search_vector = TSVectorField(null=True)
 
     class Meta:  # type: ignore
         table = "property_translations"

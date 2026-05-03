@@ -170,11 +170,11 @@ def test_create_property(owner_client):
 
 - Development/tests: SQLite in-memory (`sqlite://:memory:`, default)
 - Production: PostgreSQL (`DB_URL` env var)
-- Migrations: Aerich — config in `pyproject.toml`, stored in `./migrations/`
+- Migrations: native tortoise CLI — config in `pyproject.toml` (`[tool.tortoise]`), stored in `./migrations/models/`
 
 ```bash
-uv run aerich migrate --name <description>   # generate migration
-uv run aerich upgrade                        # apply migrations
+uv run tortoise -c main.TORTOISE_ORM makemigrations
+uv run tortoise -c main.TORTOISE_ORM migrate
 ```
 
 ## Environment variables
