@@ -7,6 +7,7 @@ from uuid import UUID
 import httpx
 from fastapi import HTTPException, status
 from ms_core import CRUD
+from tortoise import Tortoise
 from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.expressions import Q
 
@@ -48,6 +49,12 @@ from .schemas import (
 )
 
 FALLBACK_NAME = "Untitled"
+
+_PG_FTS_CONFIG: dict[str, str] = {"en": "english", "ru": "russian", "bg": "bulgarian"}
+
+
+def _fts_config(locale: str) -> str:
+    return _PG_FTS_CONFIG.get(locale, "simple")
 
 
 @lru_cache(maxsize=1)
@@ -273,7 +280,13 @@ class PropertyTranslationCRUD(CRUD[PropertyTranslation, TranslationResponse]):  
 # Property CRUD
 # ---------------------------------------------------------------------------
 
-PREFETCH = ("images", "unavailabilities", "translations", "weekday_prices", "date_price_overrides")
+PREFETCH = (
+    "images",
+    "unavailabilities",
+    "translations",
+    "weekday_prices",
+    "date_price_overrides",
+)
 
 
 class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
@@ -380,6 +393,7 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         self, filters: PropertyFilters, locale: str = settings.DEFAULT_LOCALE
     ) -> list[PropertyListItem]:
         qs = Property.all()
+        rank_map: dict[str, float] = {}
 
         if filters.status is not None:
             qs = qs.filter(status=filters.status)
@@ -392,11 +406,31 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         if filters.q is not None:
             term = filters.q.strip()
             if term:
-                qs = qs.filter(
-                    Q(translations__name__icontains=term)
-                    | Q(translations__description__icontains=term)
-                    | Q(translations__address__icontains=term)
-                ).distinct()
+                if settings.db_url.startswith("sqlite"):
+                    qs = qs.filter(
+                        Q(translations__name__icontains=term)
+                        | Q(translations__description__icontains=term)
+                        | Q(translations__address__icontains=term)
+                    ).distinct()
+                else:
+                    pg_cfg = _fts_config(locale)
+                    conn = Tortoise.get_connection("default")
+                    rows = await conn.execute_query_dict(
+                        """
+                        SELECT property_id::text AS pid,
+                               MAX(TS_RANK(search_vector, WEBSEARCH_TO_TSQUERY($1::regconfig, $2))) AS rank
+                        FROM property_translations
+                        WHERE search_vector @@ WEBSEARCH_TO_TSQUERY($1::regconfig, $2)
+                          AND locale = $3
+                        GROUP BY property_id
+                        ORDER BY rank DESC
+                        """,
+                        [pg_cfg, term, locale],
+                    )
+                    if not rows:
+                        return []
+                    rank_map = {r["pid"]: float(r["rank"]) for r in rows}
+                    qs = qs.filter(id__in=list(rank_map.keys()))
         if filters.property_type is not None:
             qs = qs.filter(property_type__in=filters.property_type)
         if filters.has_parking is not None:
@@ -468,6 +502,8 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                     thumbnail=thumbnail,
                 )
             )
+        if rank_map:
+            results.sort(key=lambda p: rank_map.get(str(p.id), 0.0), reverse=True)
         return results
 
 
@@ -488,7 +524,9 @@ property_translation_crud = PropertyTranslationCRUD(
 
 class WeekdayPriceCRUD(CRUD[PropertyWeekdayPrice, WeekdayPriceOut]):  # type: ignore
     async def list_for_property(self, property_id: UUID) -> list[WeekdayPriceOut]:
-        items = await PropertyWeekdayPrice.filter(property_id=property_id).order_by("weekday")
+        items = await PropertyWeekdayPrice.filter(property_id=property_id).order_by(
+            "weekday"
+        )
         return [WeekdayPriceOut.model_validate(i, from_attributes=True) for i in items]
 
     async def upsert_all(
@@ -505,7 +543,9 @@ class WeekdayPriceCRUD(CRUD[PropertyWeekdayPrice, WeekdayPriceOut]):  # type: ig
             )
             created.append(inst)
         created.sort(key=lambda x: x.weekday)
-        return [WeekdayPriceOut.model_validate(i, from_attributes=True) for i in created]
+        return [
+            WeekdayPriceOut.model_validate(i, from_attributes=True) for i in created
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -526,7 +566,9 @@ class DatePriceOverrideCRUD(CRUD[PropertyDatePriceOverride, DatePriceOverrideOut
         if to_date:
             qs = qs.filter(start_date__lte=to_date)
         items = await qs.order_by("start_date", "created_at")
-        return [DatePriceOverrideOut.model_validate(i, from_attributes=True) for i in items]
+        return [
+            DatePriceOverrideOut.model_validate(i, from_attributes=True) for i in items
+        ]
 
     async def create_for_property(
         self, property_id: UUID, payload: DatePriceOverrideIn
@@ -539,7 +581,9 @@ class DatePriceOverrideCRUD(CRUD[PropertyDatePriceOverride, DatePriceOverrideOut
     async def update(
         self, override_id: UUID, property_id: UUID, payload: DatePriceOverrideUpdate
     ) -> DatePriceOverrideOut | None:
-        inst = await PropertyDatePriceOverride.get_or_none(id=override_id, property_id=property_id)
+        inst = await PropertyDatePriceOverride.get_or_none(
+            id=override_id, property_id=property_id
+        )
         if not inst:
             return None
         await inst.update_from_dict(payload.model_dump(exclude_none=True)).save()
@@ -550,7 +594,9 @@ class DatePriceOverrideCRUD(CRUD[PropertyDatePriceOverride, DatePriceOverrideOut
 
 
 weekday_price_crud = WeekdayPriceCRUD(PropertyWeekdayPrice, WeekdayPriceOut)
-date_override_crud = DatePriceOverrideCRUD(PropertyDatePriceOverride, DatePriceOverrideOut)
+date_override_crud = DatePriceOverrideCRUD(
+    PropertyDatePriceOverride, DatePriceOverrideOut
+)
 
 
 async def assert_owns_property(property_id: UUID, current_user: CurrentUser) -> None:
