@@ -71,6 +71,19 @@ def get_settlement(ekatte: str) -> SettlementEntry | None:
     return _ekatte_index().get(ekatte)
 
 
+def search_settlements(q: str, lang: str, limit: int = 10) -> list[SettlementEntry]:
+    q_lower = q.lower()
+    results: list[SettlementEntry] = []
+    for entries in _settlements_by_oblast().values():
+        for s in entries:
+            name = s["name_en"] if lang == "en" else s["name"]
+            if q_lower in name.lower():
+                results.append(s)
+                if len(results) >= limit:
+                    return results
+    return results
+
+
 def resolve_city_name(ekatte: str | None, lang: str) -> str | None:
     if not ekatte:
         return None
