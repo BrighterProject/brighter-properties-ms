@@ -14,7 +14,7 @@ class OblastResponse(BaseModel):
 
 class SettlementResponse(BaseModel):
     ekatte: str
-    tvm: str
+    tvm: str | None
     name: str
 
 
