@@ -471,6 +471,7 @@ class PriceResolutionResponse(BaseModel):
 class PropertyFilters(BaseModel):
     """Bind to a FastAPI route via Depends(PropertyFilters)."""
 
+    q: str | None = Field(default=None, max_length=200)  # free-text keyword search
     region_code: str | None = None
     settlement_ekatte: str | None = None
     city: str | None = None  # legacy text search fallback

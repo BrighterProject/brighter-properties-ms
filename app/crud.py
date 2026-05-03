@@ -389,6 +389,14 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             qs = qs.filter(settlement_ekatte=filters.settlement_ekatte)
         if filters.city is not None:
             qs = qs.filter(city__icontains=filters.city)
+        if filters.q is not None:
+            term = filters.q.strip()
+            if term:
+                qs = qs.filter(
+                    Q(translations__name__icontains=term)
+                    | Q(translations__description__icontains=term)
+                    | Q(translations__address__icontains=term)
+                ).distinct()
         if filters.property_type is not None:
             qs = qs.filter(property_type__in=filters.property_type)
         if filters.has_parking is not None:
