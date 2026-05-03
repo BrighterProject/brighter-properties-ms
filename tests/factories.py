@@ -143,6 +143,8 @@ def property_list_item(**overrides) -> dict:
         id=str(PROPERTY_ID),
         name="Cozy Apartment",
         description="A cozy apartment in Sofia.",
+        region_code="SFO",
+        settlement_ekatte="68134",
         city="Sofia",
         property_type="apartment",
         status="active",
@@ -167,6 +169,7 @@ def property_response(**overrides) -> dict:
         owner_id=str(OWNER_ID),
         property_type="apartment",
         status="active",
+        registration_number="АПТ-2024-00123",
         city="Sofia",
         latitude=None,
         longitude=None,
@@ -233,6 +236,9 @@ def unavail_response(**overrides) -> dict:
 def property_create_payload(**overrides) -> dict:
     base = dict(
         city="Sofia",
+        region_code="SFO",
+        settlement_ekatte="68134",
+        registration_number="АПТ-2024-00123",
         price_per_night="50.00",
         property_type="apartment",
         max_guests=4,

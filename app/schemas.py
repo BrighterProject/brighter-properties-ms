@@ -260,6 +260,9 @@ class PropertyCreate(PropertyBase):
     region_code: str = Field(..., max_length=10)
     settlement_ekatte: str = Field(..., max_length=10)
 
+    # Регистрационен номер на обекта (tourism registry number) — required, immutable
+    registration_number: str = Field(..., min_length=1, max_length=50)
+
     translations: list[TranslationCreate] = Field(..., min_length=1)
     images: list[PropertyImageCreate] = Field(default_factory=list)
 
@@ -353,6 +356,7 @@ class PropertyResponse(PropertyBase):
     id: UUID
     owner_id: UUID
     status: PropertyStatus
+    registration_number: str | None = None
 
     rating: Decimal
     total_reviews: int

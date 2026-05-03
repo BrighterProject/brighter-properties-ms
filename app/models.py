@@ -61,6 +61,9 @@ class Property(Model):
 
     owner_id = fields.UUIDField()
 
+    # Tourism registry number (рег. номер на обекта) — immutable after creation
+    registration_number = fields.CharField(max_length=50, null=True)
+
     # Location (non-translatable)
     region_code = fields.CharField(max_length=10, null=True)       # oblast code e.g. "SFO"
     settlement_ekatte = fields.CharField(max_length=10, null=True)  # EKATTE code e.g. "68134"
