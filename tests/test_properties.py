@@ -1,5 +1,6 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.schemas import PropertyResponse
@@ -245,3 +246,75 @@ class TestDeleteProperty:
             mock_crud.admin_delete_property = AsyncMock(return_value=False)
             resp = client_factory(make_admin()).delete(f"/properties/{PROPERTY_ID}")
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Task 4 — subscription quota enforcement on property creation
+# ---------------------------------------------------------------------------
+
+
+def _build_quota_app(current_user, payments_can_add: bool):
+    """Build an app with the payments client mocked to allow or deny."""
+    from app.deps import (
+        can_admin_write,
+        can_delete_or_admin,
+        can_images_or_admin,
+        can_read_own_properties,
+        can_read_properties,
+        can_schedule_or_admin,
+        can_write_or_admin,
+        get_current_user,
+        get_payments_client,
+    )
+    from app.limiter import limiter
+    from app.routers.property import router
+
+    mock_pc = MagicMock()
+    mock_pc.can_add_listing = AsyncMock(return_value=payments_can_add)
+
+    app = FastAPI()
+    app.include_router(router)
+    app.state.limiter = limiter
+
+    async def _user():
+        return current_user
+
+    for dep in (
+        can_read_properties, can_read_own_properties, can_write_or_admin,
+        can_delete_or_admin, can_images_or_admin, can_schedule_or_admin,
+        can_admin_write, get_current_user,
+    ):
+        app.dependency_overrides[dep] = _user
+
+    app.dependency_overrides[get_payments_client] = lambda: mock_pc
+    return app
+
+
+def test_create_property_blocked_when_no_subscription():
+    """Property creation must be denied when payments-ms reports quota exceeded."""
+    payload = property_create_payload()
+    app = _build_quota_app(make_user(), payments_can_add=False)
+    client = TestClient(app, raise_server_exceptions=True)
+    with patch("app.routers.property.property_crud"):
+        resp = client.post("/properties", json=payload)
+    assert resp.status_code == 403
+    assert "subscription" in resp.json()["detail"].lower()
+
+
+def test_create_property_allowed_when_subscription_active():
+    """Property creation proceeds when payments-ms approves quota."""
+    payload = property_create_payload()
+    created = PropertyResponse(**property_response())
+    app = _build_quota_app(make_user(), payments_can_add=True)
+    client = TestClient(app, raise_server_exceptions=True)
+    with (
+        patch("app.routers.property.property_crud") as mock_crud,
+        patch("app.routers.property.property_translation_crud") as mock_tr,
+        patch("app.routers.property.property_image_crud") as mock_img,
+    ):
+        mock_crud.create_property = AsyncMock(return_value=created)
+        mock_crud.get_property = AsyncMock(return_value=created)
+        mock_tr.create_for_property = AsyncMock()
+        mock_img.create_for_property = AsyncMock()
+        resp = client.post("/properties", json=payload)
+    assert resp.status_code == 201

@@ -8,11 +8,13 @@ from app.crud import property_crud, property_image_crud, property_translation_cr
 from app.deps import (
     CurrentUser,
     NotificationsClient,
+    PaymentsClient,
     UsersClient,
     can_admin_write,
     can_delete_or_admin,
     can_write_or_admin,
     get_notifications_client,
+    get_payments_client,
     get_users_client,
 )
 from app.limiter import limiter
@@ -53,7 +55,15 @@ async def create_property(
     request: Request,
     payload: PropertyCreate,
     current_user: CurrentUser = Depends(can_write_or_admin),
+    payments_client: PaymentsClient = Depends(get_payments_client),
 ):
+    if not current_user.is_admin:
+        allowed = await payments_client.can_add_listing(current_user.id)
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Active subscription required to add listings. Upgrade your plan.",
+            )
     created = await property_crud.create_property(payload, owner_id=current_user.id)
 
     for tr in payload.translations:
