@@ -101,6 +101,9 @@ class Property(Model):
         CancellationPolicy, default=CancellationPolicy.MODERATE
     )
 
+    # Payment configuration (serialized PaymentConfig)
+    payment_config = fields.JSONField(default=dict)
+
     # Gap filler
     enable_gap_filler = fields.BooleanField(default=False)
     gap_tax_pct = fields.DecimalField(max_digits=5, decimal_places=2, default=0)  # -100–100 percent
