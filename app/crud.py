@@ -6,10 +6,12 @@ from uuid import UUID
 
 import httpx
 from fastapi import HTTPException, status
+from loguru import logger
 from ms_core import CRUD
 from tortoise import Tortoise
 from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.expressions import Q
+from tortoise.query_utils import Prefetch
 
 from app import settings
 from app.deps import CurrentUser
@@ -221,11 +223,11 @@ class PropertyTranslationCRUD(CRUD[PropertyTranslation, TranslationResponse]):  
                 property_id=property_id,
                 **payload.model_dump(),
             )
-        except IntegrityError:
+        except IntegrityError as err:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Translation for locale '{payload.locale}' already exists",
-            )
+            ) from err
         return TranslationResponse.model_validate(inst, from_attributes=True)
 
     async def update(
@@ -473,7 +475,15 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         offset = (filters.page - 1) * filters.page_size
         qs = qs.offset(offset).limit(filters.page_size)
 
-        properties = await qs.prefetch_related("images", "translations")
+        properties = await qs.prefetch_related(
+            "images",
+            Prefetch(
+                "translations",
+                queryset=PropertyTranslation.all().only(
+                    "id", "property_id", "locale", "name", "description", "address"
+                ),
+            ),
+        )
 
         results: list[PropertyListItem] = []
         for v in properties:
