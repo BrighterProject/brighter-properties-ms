@@ -299,6 +299,19 @@ class PaymentsClient:
             logger.error("PaymentsClient.can_add_listing failed: {}", exc)
             return False
 
+    async def get_payment_capabilities(self) -> dict[str, bool]:
+        """Return {can_accept_card, can_accept_bank_transfer} for the calling owner."""
+        try:
+            resp = await self._client.get(
+                "/payments/capabilities",
+                headers=self._headers(),
+            )
+            if resp.status_code == 200:
+                return resp.json()
+        except Exception as exc:
+            logger.error("PaymentsClient.get_payment_capabilities failed: {}", exc)
+        return {"can_accept_card": False, "can_accept_bank_transfer": False}
+
 
 def get_payments_client(
     current_user: CurrentUser = Depends(get_current_user),

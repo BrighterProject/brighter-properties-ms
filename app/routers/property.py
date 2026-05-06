@@ -108,11 +108,27 @@ async def update_property(
     property_id: UUID,
     payload: PropertyUpdate,
     current_user: CurrentUser = Depends(can_write_or_admin),
+    payments_client: PaymentsClient = Depends(get_payments_client),
 ):
     is_admin = (
         PropertyScope.ADMIN_WRITE in current_user.scopes
         or PropertyScope.ADMIN in current_user.scopes
     )
+
+    if payload.payment_config is not None and not is_admin:
+        caps = await payments_client.get_payment_capabilities()
+        methods = payload.payment_config.accepted_methods
+        if "card" in methods and not caps.get("can_accept_card"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Card payments require an active Stripe Connect account with no outstanding requirements.",
+            )
+        if "bank_transfer" in methods and not caps.get("can_accept_bank_transfer"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bank transfer payments require a bank account to be configured.",
+            )
+
     updated = await property_crud.update_property(
         property_id, payload, owner_id=None if is_admin else current_user.id
     )
