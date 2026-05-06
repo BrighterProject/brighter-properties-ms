@@ -181,12 +181,13 @@ async def update_property_status(
 async def _notify_property_approved(
     property, users_client: UsersClient, nc: NotificationsClient
 ) -> None:
-    owner_email = await users_client.get_email(property.owner_id)
+    owner_email, owner_locale = await users_client.get_email_and_locale(property.owner_id)
     if not owner_email:
         return
     await nc.send(
         to=owner_email,
         notification_type="property_approved",
+        locale=owner_locale,
     )
 
 

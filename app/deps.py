@@ -185,14 +185,15 @@ class UsersClient:
             "X-User-Scopes": " ".join(admin.scopes),
         }
 
-    async def get_email(self, user_id: UUID) -> str | None:
+    async def get_email_and_locale(self, user_id: UUID) -> tuple[str | None, str]:
         try:
             resp = await self._client.get(f"/users/{user_id}", headers=self._headers())
             if resp.status_code == 200:
-                return resp.json().get("email")
+                data = resp.json()
+                return data.get("email"), data.get("locale", "en")
         except Exception as exc:
-            logger.warning("UsersClient: failed to fetch email for user {} — {}", user_id, exc)
-        return None
+            logger.warning("UsersClient: failed to fetch user {} — {}", user_id, exc)
+        return None, "en"
 
 
 _users_client = UsersClient()
@@ -230,7 +231,7 @@ class NotificationsClient:
         }
 
     async def send(
-        self, *, to: str, notification_type: str, data: dict | None = None
+        self, *, to: str, notification_type: str, data: dict | None = None, locale: str | None = None
     ) -> None:
         try:
             logger.debug("Sending notification from properties-ms | type={} to={} data={}", notification_type, to, data)
@@ -241,6 +242,7 @@ class NotificationsClient:
                     "to": to,
                     "data": data or {},
                     "triggered_by": "properties-ms",
+                    "locale": locale,
                 },
                 headers=self._headers(),
             )
