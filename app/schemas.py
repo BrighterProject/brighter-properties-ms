@@ -420,6 +420,7 @@ class PropertyListItem(BaseModel):
     rating: Decimal
     total_reviews: int
     thumbnail: str | None = None
+    cancellation_policy: CancellationPolicy | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
