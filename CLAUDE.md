@@ -183,3 +183,6 @@ uv run tortoise -c main.TORTOISE_ORM migrate
 |----------------|--------------------------|------------------------------------|
 | `DB_URL`       | `sqlite://:memory:`      | Database connection string         |
 | `USERS_MS_URL` | `http://localhost:8000`  | Users microservice base URL        |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4317` | OTLP gRPC endpoint |
+| `OTEL_SDK_DISABLED` | `false` | Set `true` to skip telemetry (CI / light dev) |
+| `LOG_COLORIZE` | `false` | Set `true` for ANSI-coloured logs in compose |
