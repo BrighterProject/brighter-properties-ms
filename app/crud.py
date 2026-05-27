@@ -387,6 +387,7 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                     rating=v.rating,
                     total_reviews=v.total_reviews,
                     thumbnail=thumbnail,
+                    cancellation_policy=v.cancellation_policy,
                 )
             )
         return results

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, time
 from decimal import Decimal
 from enum import StrEnum
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import Query
@@ -19,6 +19,25 @@ from pydantic import (
 from app.models import SUPPORTED_LOCALES
 from app.models import AmenityType as AmenityType
 from app.settings import DEFAULT_LOCALE
+
+
+PaymentMethodOption = Literal["card", "bank_transfer", "cash"]
+
+
+class PaymentConfig(BaseModel):
+    """Per-property payment configuration stored as JSON on the Property model."""
+
+    accepted_methods: list[PaymentMethodOption] = ["card"]
+    deposit_pct: int = 100
+    remaining_method: PaymentMethodOption | None = None
+
+    @field_validator("deposit_pct")
+    @classmethod
+    def validate_deposit_pct(cls, v: int) -> int:
+        """Validate deposit percentage is between 20 and 100."""
+        if not 20 <= v <= 100:
+            raise ValueError("deposit_pct must be between 20 and 100")
+        return v
 
 
 class PropertyType(StrEnum):
@@ -224,6 +243,9 @@ class PropertyBase(BaseModel):
     # Policy
     cancellation_policy: CancellationPolicy = CancellationPolicy.MODERATE
 
+    # Payment configuration
+    payment_config: PaymentConfig = Field(default_factory=PaymentConfig)
+
     # Gap filler
     enable_gap_filler: bool = False
     gap_tax_pct: Decimal = Field(default=Decimal("0"), ge=Decimal("-100"), le=Decimal("100"))
@@ -310,6 +332,9 @@ class PropertyUpdate(BaseModel):
 
     cancellation_policy: CancellationPolicy | None = None
 
+    # Payment configuration
+    payment_config: PaymentConfig | None = None
+
     # Gap filler
     enable_gap_filler: bool | None = None
     gap_tax_pct: Decimal | None = Field(default=None, ge=-100, le=100, decimal_places=2)
@@ -395,6 +420,7 @@ class PropertyListItem(BaseModel):
     rating: Decimal
     total_reviews: int
     thumbnail: str | None = None
+    cancellation_policy: CancellationPolicy | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

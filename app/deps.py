@@ -185,14 +185,15 @@ class UsersClient:
             "X-User-Scopes": " ".join(admin.scopes),
         }
 
-    async def get_email(self, user_id: UUID) -> str | None:
+    async def get_email_and_locale(self, user_id: UUID) -> tuple[str | None, str]:
         try:
             resp = await self._client.get(f"/users/{user_id}", headers=self._headers())
             if resp.status_code == 200:
-                return resp.json().get("email")
+                data = resp.json()
+                return data.get("email"), data.get("locale", "en")
         except Exception as exc:
-            logger.warning("UsersClient: failed to fetch email for user {} — {}", user_id, exc)
-        return None
+            logger.warning("UsersClient: failed to fetch user {} — {}", user_id, exc)
+        return None, "en"
 
 
 _users_client = UsersClient()
@@ -230,7 +231,7 @@ class NotificationsClient:
         }
 
     async def send(
-        self, *, to: str, notification_type: str, data: dict | None = None
+        self, *, to: str, notification_type: str, data: dict | None = None, locale: str | None = None
     ) -> None:
         try:
             logger.debug("Sending notification from properties-ms | type={} to={} data={}", notification_type, to, data)
@@ -241,6 +242,7 @@ class NotificationsClient:
                     "to": to,
                     "data": data or {},
                     "triggered_by": "properties-ms",
+                    "locale": locale,
                 },
                 headers=self._headers(),
             )
@@ -254,3 +256,66 @@ _notifications_client = NotificationsClient()
 
 def get_notifications_client() -> NotificationsClient:
     return _notifications_client
+
+
+# ---------------------------------------------------------------------------
+# PaymentsClient — subscription quota checks against payments-ms
+# ---------------------------------------------------------------------------
+
+
+@lru_cache(maxsize=1)
+def _get_payments_http_client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        base_url=settings.payments_ms_url,
+        timeout=httpx.Timeout(5.0),
+        follow_redirects=True,
+    )
+
+
+class PaymentsClient:
+    """Thin wrapper around the payments-ms subscription quota endpoint."""
+
+    def __init__(self, caller: "CurrentUser") -> None:
+        self._caller = caller
+
+    @property
+    def _client(self) -> httpx.AsyncClient:
+        return _get_payments_http_client()
+
+    def _headers(self) -> dict[str, str]:
+        return {
+            "X-User-Id": str(self._caller.id),
+            "X-Username": quote(self._caller.username),
+            "X-User-Scopes": " ".join(self._caller.scopes),
+        }
+
+    async def can_add_listing(self, owner_id: UUID) -> bool:
+        try:
+            resp = await self._client.get(
+                "/subscriptions/can-add-listing",
+                params={"owner_id": str(owner_id)},
+                headers=self._headers(),
+            )
+            return resp.status_code == 200 and resp.json().get("allowed", False)
+        except Exception as exc:
+            logger.error("PaymentsClient.can_add_listing failed: {}", exc)
+            return False
+
+    async def get_payment_capabilities(self) -> dict[str, bool]:
+        """Return {can_accept_card, can_accept_bank_transfer} for the calling owner."""
+        try:
+            resp = await self._client.get(
+                "/payments/capabilities",
+                headers=self._headers(),
+            )
+            if resp.status_code == 200:
+                return resp.json()
+        except Exception as exc:
+            logger.error("PaymentsClient.get_payment_capabilities failed: {}", exc)
+        return {"can_accept_card": False, "can_accept_bank_transfer": False}
+
+
+def get_payments_client(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> PaymentsClient:
+    return PaymentsClient(caller=current_user)
