@@ -2,6 +2,7 @@ from enum import StrEnum
 
 from ms_core import AbstractModel as Model
 from tortoise import fields
+from tortoise.contrib.postgres.fields import TSVectorField
 
 
 class PropertyType(StrEnum):
@@ -60,8 +61,13 @@ class Property(Model):
 
     owner_id = fields.UUIDField()
 
+    # Tourism registry number (рег. номер на обекта) — immutable after creation
+    registration_number = fields.CharField(max_length=50, null=True)
+
     # Location (non-translatable)
-    city = fields.CharField(max_length=100)
+    region_code = fields.CharField(max_length=10, null=True)       # oblast code e.g. "SFO"
+    settlement_ekatte = fields.CharField(max_length=10, null=True)  # EKATTE code e.g. "68134"
+    city = fields.CharField(max_length=100, null=True)              # legacy; kept for old data
     latitude = fields.DecimalField(max_digits=9, decimal_places=6, null=True)
     longitude = fields.DecimalField(max_digits=9, decimal_places=6, null=True)
 
@@ -94,6 +100,12 @@ class Property(Model):
     cancellation_policy = fields.CharEnumField(
         CancellationPolicy, default=CancellationPolicy.MODERATE
     )
+
+    # Gap filler
+    enable_gap_filler = fields.BooleanField(default=False)
+    gap_tax_pct = fields.DecimalField(max_digits=5, decimal_places=2, default=0)  # -100–100 percent
+    gap_last_minute_window = fields.IntField(default=7)  # days from today
+    gap_adjacent_only = fields.BooleanField(default=True)  # legacy: always True
 
     # Meta
     rating = fields.DecimalField(max_digits=3, decimal_places=2, default=0.0)
@@ -130,6 +142,7 @@ class PropertyTranslation(Model):
     description = fields.TextField()
     address = fields.CharField(max_length=500)
     house_rules = fields.TextField(null=True)
+    search_vector = TSVectorField(null=True)
 
     class Meta:  # type: ignore
         table = "property_translations"

@@ -192,7 +192,9 @@ class PropertyBase(BaseModel):
     property_type: PropertyType = PropertyType.APARTMENT
 
     # Location
-    city: str = Field(..., max_length=100)
+    region_code: str | None = Field(default=None, max_length=10)
+    settlement_ekatte: str | None = Field(default=None, max_length=10)
+    city: str | None = Field(default=None, max_length=100)  # legacy; derived from settlement on read
     latitude: Decimal | None = Field(default=None, ge=-90, le=90, decimal_places=6)
     longitude: Decimal | None = Field(default=None, ge=-180, le=180, decimal_places=6)
 
@@ -222,6 +224,12 @@ class PropertyBase(BaseModel):
     # Policy
     cancellation_policy: CancellationPolicy = CancellationPolicy.MODERATE
 
+    # Gap filler
+    enable_gap_filler: bool = False
+    gap_tax_pct: Decimal = Field(default=Decimal("0"), ge=Decimal("-100"), le=Decimal("100"))
+    gap_last_minute_window: int = Field(default=7, ge=1, le=90)
+    gap_adjacent_only: bool = True
+
     @field_validator("currency", mode="before")
     @classmethod
     def uppercase_currency(cls, v: Any) -> Any:
@@ -249,6 +257,12 @@ class PropertyCreate(PropertyBase):
     Must include at least one translation.
     """
 
+    region_code: str = Field(..., max_length=10)
+    settlement_ekatte: str = Field(..., max_length=10)
+
+    # Регистрационен номер на обекта (tourism registry number) — required, immutable
+    registration_number: str = Field(..., min_length=1, max_length=50)
+
     translations: list[TranslationCreate] = Field(..., min_length=1)
     images: list[PropertyImageCreate] = Field(default_factory=list)
 
@@ -270,6 +284,8 @@ class PropertyUpdate(BaseModel):
 
     property_type: PropertyType | None = None
 
+    region_code: str | None = Field(default=None, max_length=10)
+    settlement_ekatte: str | None = Field(default=None, max_length=10)
     city: str | None = Field(default=None, max_length=100)
     latitude: Decimal | None = Field(default=None, ge=-90, le=90)
     longitude: Decimal | None = Field(default=None, ge=-180, le=180)
@@ -293,6 +309,12 @@ class PropertyUpdate(BaseModel):
     max_nights: int | None = Field(default=None, ge=1)
 
     cancellation_policy: CancellationPolicy | None = None
+
+    # Gap filler
+    enable_gap_filler: bool | None = None
+    gap_tax_pct: Decimal | None = Field(default=None, ge=-100, le=100, decimal_places=2)
+    gap_last_minute_window: int | None = Field(default=None, ge=1, le=90)
+    gap_adjacent_only: bool | None = None
 
     # Locale-keyed translation upserts (locale → partial fields).
     # Existing translations are updated; missing locales are created if
@@ -334,6 +356,7 @@ class PropertyResponse(PropertyBase):
     id: UUID
     owner_id: UUID
     status: PropertyStatus
+    registration_number: str | None = None
 
     rating: Decimal
     total_reviews: int
@@ -359,7 +382,9 @@ class PropertyListItem(BaseModel):
     id: UUID
     name: str  # resolved from translations for the requested locale
     description: str  # resolved from translations for the requested locale
-    city: str
+    region_code: str | None
+    settlement_ekatte: str | None
+    city: str | None  # resolved settlement name in requested locale
     property_type: PropertyType
     status: PropertyStatus
     price_per_night: Decimal
@@ -450,7 +475,10 @@ class PriceResolutionResponse(BaseModel):
 class PropertyFilters(BaseModel):
     """Bind to a FastAPI route via Depends(PropertyFilters)."""
 
-    city: str | None = None
+    q: str | None = Field(default=None, max_length=200)  # free-text keyword search
+    region_code: str | None = None
+    settlement_ekatte: str | None = None
+    city: str | None = None  # legacy text search fallback
     property_type: list[PropertyType] | None = Field(default=None)
     has_parking: bool | None = None
     free_cancellation: bool | None = None

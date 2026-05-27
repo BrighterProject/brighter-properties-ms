@@ -13,9 +13,17 @@ from app.schemas import (
 from .factories import NOW, UNAVAIL_END, UNAVAIL_START, translation_dict
 
 
+VALID_BASE = dict(
+    region_code="SFO",
+    settlement_ekatte="68134",
+    registration_number="АПТ-2024-00123",
+)
+
+
 class TestPropertyCreateSchema:
     def test_valid_payload(self):
         data = PropertyCreate(
+            **VALID_BASE,
             city="Sofia",
             price_per_night=Decimal("50.00"),
             translations=[TranslationCreate(**translation_dict("bg"))],
@@ -26,6 +34,7 @@ class TestPropertyCreateSchema:
 
     def test_currency_uppercased(self):
         data = PropertyCreate(
+            **VALID_BASE,
             city="City",
             price_per_night=Decimal("10"),
             currency="eur",
@@ -53,6 +62,7 @@ class TestPropertyCreateSchema:
     def test_min_nights_greater_than_max_raises(self):
         with pytest.raises(ValidationError, match="min_nights"):
             PropertyCreate(
+                **VALID_BASE,
                 city="City",
                 price_per_night=Decimal("10"),
                 min_nights=10,
@@ -89,6 +99,7 @@ class TestPropertyCreateSchema:
 
     def test_multiple_locales_accepted(self):
         data = PropertyCreate(
+            **VALID_BASE,
             city="Sofia",
             price_per_night=Decimal("50.00"),
             translations=[
