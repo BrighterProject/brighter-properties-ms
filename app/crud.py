@@ -337,6 +337,9 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
     async def admin_delete_property(self, property_id: UUID) -> bool:
         return await self.delete_by(id=property_id)
 
+    async def count_by_owner(self, owner_id: UUID) -> int:
+        return await Property.filter(owner_id=owner_id).count()
+
     async def get_property(self, property_id: UUID) -> PropertyResponse | None:
         inst = await Property.get_or_none(id=property_id).prefetch_related(*PREFETCH)
 

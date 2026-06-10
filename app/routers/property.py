@@ -58,7 +58,8 @@ async def create_property(
     payments_client: PaymentsClient = Depends(get_payments_client),
 ):
     if not current_user.is_admin:
-        allowed = await payments_client.can_add_listing(current_user.id)
+        current_count = await property_crud.count_by_owner(current_user.id)
+        allowed = await payments_client.can_add_listing(current_user.id, current_count)
         if not allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

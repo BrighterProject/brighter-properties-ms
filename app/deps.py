@@ -289,11 +289,11 @@ class PaymentsClient:
             "X-User-Scopes": " ".join(self._caller.scopes),
         }
 
-    async def can_add_listing(self, owner_id: UUID) -> bool:
+    async def can_add_listing(self, owner_id: UUID, current_count: int) -> bool:
         try:
             resp = await self._client.get(
-                "/subscriptions/can-add-listing",
-                params={"owner_id": str(owner_id)},
+                "/payments/subscriptions/can-add-listing",
+                params={"owner_id": str(owner_id), "current_count": current_count},
                 headers=self._headers(),
             )
             return resp.status_code == 200 and resp.json().get("allowed", False)

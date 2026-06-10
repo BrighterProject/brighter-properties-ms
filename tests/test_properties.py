@@ -93,6 +93,7 @@ class TestCreateProperty:
             patch("app.routers.property.property_translation_crud") as mock_tr,
             patch("app.routers.property.property_image_crud") as mock_img,
         ):
+            mock_crud.count_by_owner = AsyncMock(return_value=0)
             mock_crud.create_property = AsyncMock(return_value=created)
             mock_crud.get_property = AsyncMock(return_value=created)
             mock_tr.create_for_property = AsyncMock()
@@ -109,6 +110,7 @@ class TestCreateProperty:
             patch("app.routers.property.property_translation_crud") as mock_tr,
             patch("app.routers.property.property_image_crud") as mock_img,
         ):
+            mock_crud.count_by_owner = AsyncMock(return_value=0)
             mock_crud.create_property = AsyncMock(return_value=created)
             mock_crud.get_property = AsyncMock(return_value=created)
             mock_tr.create_for_property = AsyncMock()
@@ -295,7 +297,8 @@ def test_create_property_blocked_when_no_subscription():
     payload = property_create_payload()
     app = _build_quota_app(make_user(), payments_can_add=False)
     client = TestClient(app, raise_server_exceptions=True)
-    with patch("app.routers.property.property_crud"):
+    with patch("app.routers.property.property_crud") as mock_crud:
+        mock_crud.count_by_owner = AsyncMock(return_value=1)
         resp = client.post("/properties", json=payload)
     assert resp.status_code == 403
     assert "subscription" in resp.json()["detail"].lower()
@@ -312,6 +315,7 @@ def test_create_property_allowed_when_subscription_active():
         patch("app.routers.property.property_translation_crud") as mock_tr,
         patch("app.routers.property.property_image_crud") as mock_img,
     ):
+        mock_crud.count_by_owner = AsyncMock(return_value=0)
         mock_crud.create_property = AsyncMock(return_value=created)
         mock_crud.get_property = AsyncMock(return_value=created)
         mock_tr.create_for_property = AsyncMock()

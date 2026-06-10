@@ -36,6 +36,7 @@ class TestGapFillerDefaults:
             patch(TR_CRUD_PATH) as mock_tr,
             patch(IMG_CRUD_PATH) as mock_img,
         ):
+            mock_crud.count_by_owner = AsyncMock(return_value=0)
             mock_crud.create_property = AsyncMock(return_value=created)
             mock_crud.get_property = AsyncMock(return_value=created)
             mock_tr.create_for_property = AsyncMock()
@@ -69,6 +70,7 @@ class TestGapFillerDefaults:
             patch(TR_CRUD_PATH) as mock_tr,
             patch(IMG_CRUD_PATH) as mock_img,
         ):
+            mock_crud.count_by_owner = AsyncMock(return_value=0)
             mock_crud.create_property = AsyncMock(return_value=created)
             mock_crud.get_property = AsyncMock(return_value=created)
             mock_tr.create_for_property = AsyncMock()
