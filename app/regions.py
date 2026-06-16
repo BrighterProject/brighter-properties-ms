@@ -71,6 +71,18 @@ def get_settlement(ekatte: str) -> SettlementEntry | None:
     return _ekatte_index().get(ekatte)
 
 
+def search_oblasts(q: str, lang: str, limit: int = 10) -> list[OblastEntry]:
+    q_lower = q.lower()
+    results: list[OblastEntry] = []
+    for o in _oblasts():
+        name = o["name_en"] if lang == "en" else o["name"]
+        if q_lower in name.lower():
+            results.append(o)
+            if len(results) >= limit:
+                break
+    return results
+
+
 def search_settlements(q: str, lang: str, limit: int = 10) -> list[SettlementEntry]:
     q_lower = q.lower()
     results: list[SettlementEntry] = []
