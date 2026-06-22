@@ -113,7 +113,9 @@ async def update_override(
     await assert_owns_property(property_id, current_user)
     item = await date_override_crud.update(override_id, property_id, payload)
     if not item:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Override not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Override not found"
+        )
     return item
 
 
@@ -128,7 +130,9 @@ async def delete_override(
     await assert_owns_property(property_id, current_user)
     deleted = await date_override_crud.delete(override_id, property_id)
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Override not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Override not found"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +164,9 @@ async def resolve_pricing(
 
     prop = await Property.get_or_none(id=property_id)
     if not prop:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Property not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Property not found"
+        )
 
     nights = await resolve_prices_for_property(
         property_id=property_id,

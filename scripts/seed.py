@@ -66,7 +66,8 @@ FIXTURES = [
                 "name": "Луксозен апартамент в центъра на София",
                 "description": (
                     "Просторен двустаен апартамент на 5 минути от НДК.\n\n"
-                    "Напълно оборудвана кухня, бързи Wi-Fi и панорамна гледка към Витоша."
+                    "Напълно оборудвана кухня, бързи Wi-Fi и "
+                    "панорамна гледка към Витоша."
                 ),
                 "address": "бул. Витоша 15, София 1000",
             },
@@ -75,7 +76,8 @@ FIXTURES = [
                 "name": "Luxury Apartment in Sofia City Center",
                 "description": (
                     "Spacious 2-bedroom apartment 5 minutes from the NDK.\n\n"
-                    "Fully equipped kitchen, fast Wi-Fi, and a panoramic view of Vitosha."
+                    "Fully equipped kitchen, fast Wi-Fi, "
+                    "and a panoramic view of Vitosha."
                 ),
                 "address": "15 Vitosha Blvd, Sofia 1000",
             },
@@ -273,7 +275,8 @@ FIXTURES = [
                 "locale": "bg",
                 "name": "Апартамент с морска гледка — Варна Бийч",
                 "description": (
-                    "Просторен тристаен апартамент с директна гледка към Черно море.\n\n"
+                    "Просторен тристаен апартамент с директна "
+                    "гледка към Черно море.\n\n"
                     "Балкон, достъп до басейн и паркинг.\n"
                     "На 100м от плажа."
                 ),
@@ -404,7 +407,8 @@ FIXTURES = [
                 "locale": "bg",
                 "name": "Уютно студио до Националния театър, София",
                 "description": (
-                    "Компактно и добре обзаведено студио на крачка от Националния театър.\n\n"
+                    "Компактно и добре обзаведено студио на "
+                    "крачка от Националния театър.\n\n"
                     "Идеално за бизнес пътувания и кратки почивки.\n"
                     "Включен бърз Wi-Fi."
                 ),
@@ -414,7 +418,8 @@ FIXTURES = [
                 "locale": "en",
                 "name": "Cozy Studio near National Theatre, Sofia",
                 "description": (
-                    "Compact and well-furnished studio steps from the National Theatre.\n\n"
+                    "Compact and well-furnished studio "
+                    "steps from the National Theatre.\n\n"
                     "Ideal for business trips and short breaks.\n"
                     "Fast Wi-Fi included."
                 ),
@@ -440,12 +445,13 @@ async def seed(force: bool = False) -> None:
     existing = await Property.filter(status="active").count()
     if existing > 0 and not force:
         print(
-            f"[seed] {existing} active properties already exist — skipping (use --force to override)"
+            f"[seed] {existing} active properties already exist"
+            " — skipping (use --force to override)"
         )
         return
 
     if force and existing > 0:
-        deleted = await Property.filter(owner_id=SEED_OWNER_ID).delete()
+        await Property.filter(owner_id=SEED_OWNER_ID).delete()
         print("[seed] Deleted existing seed properties")
 
     created = 0

@@ -15,7 +15,8 @@ from app.schemas import (
 )
 
 router = APIRouter(
-    prefix="/properties/{property_id}/unavailabilities", tags=["Property Unavailabilities"]
+    prefix="/properties/{property_id}/unavailabilities",
+    tags=["Property Unavailabilities"],
 )
 
 
@@ -51,7 +52,9 @@ async def update_unavailability(
     current_user: CurrentUser = Depends(can_schedule_or_admin),
 ):
     await assert_owns_property(property_id, current_user)
-    item = await property_unavailability_crud.update(unavailability_id, property_id, payload)
+    item = await property_unavailability_crud.update(
+        unavailability_id, property_id, payload
+    )
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Unavailability not found"

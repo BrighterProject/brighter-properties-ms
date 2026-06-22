@@ -10,10 +10,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-import pytest
-
 from app.services.price_resolver import resolve_prices_sync
-
 
 # ---------------------------------------------------------------------------
 # Minimal stubs — mirror only the fields the resolver reads

@@ -151,7 +151,11 @@ def property_list_item(**overrides) -> dict:
         max_guests=4,
         bedrooms=2,
         rooms=[
-            {"room_type": "bedroom", "count": 2, "beds": [{"bed_type": "double", "count": 2}]},
+            {
+                "room_type": "bedroom",
+                "count": 2,
+                "beds": [{"bed_type": "double", "count": 2}],
+            },  # noqa: E501
             {"room_type": "bathroom", "count": 1},
         ],
         rating="4.50",
@@ -177,7 +181,11 @@ def property_response(**overrides) -> dict:
         bathrooms=1,
         beds=2,
         rooms=[
-            {"room_type": "bedroom", "count": 2, "beds": [{"bed_type": "double", "count": 2}]},
+            {
+                "room_type": "bedroom",
+                "count": 2,
+                "beds": [{"bed_type": "double", "count": 2}],
+            },  # noqa: E501
             {"room_type": "bathroom", "count": 1},
         ],
         has_parking=False,
@@ -232,7 +240,11 @@ def property_create_payload(**overrides) -> dict:
         max_guests=4,
         bedrooms=2,
         rooms=[
-            {"room_type": "bedroom", "count": 2, "beds": [{"bed_type": "double", "count": 2}]},
+            {
+                "room_type": "bedroom",
+                "count": 2,
+                "beds": [{"bed_type": "double", "count": 2}],
+            },  # noqa: E501
             {"room_type": "bathroom", "count": 1},
         ],
         translations=[translation_dict("bg")],

@@ -146,7 +146,9 @@ def _owner_or_admin(owner_scope: PropertyScope, admin_scope: PropertyScope):
 can_write_or_admin = _owner_or_admin(PropertyScope.WRITE, PropertyScope.ADMIN_WRITE)
 can_delete_or_admin = _owner_or_admin(PropertyScope.DELETE, PropertyScope.ADMIN_DELETE)
 can_images_or_admin = _owner_or_admin(PropertyScope.IMAGES, PropertyScope.ADMIN_WRITE)
-can_schedule_or_admin = _owner_or_admin(PropertyScope.SCHEDULE, PropertyScope.ADMIN_WRITE)
+can_schedule_or_admin = _owner_or_admin(
+    PropertyScope.SCHEDULE, PropertyScope.ADMIN_WRITE
+)
 
 
 # ---------------------------------------------------------------------------
@@ -191,7 +193,9 @@ class UsersClient:
             if resp.status_code == 200:
                 return resp.json().get("email")
         except Exception as exc:
-            logger.warning("UsersClient: failed to fetch email for user {} — {}", user_id, exc)
+            logger.warning(
+                "UsersClient: failed to fetch email for user {} — {}", user_id, exc
+            )
         return None
 
 
@@ -233,7 +237,12 @@ class NotificationsClient:
         self, *, to: str, notification_type: str, data: dict | None = None
     ) -> None:
         try:
-            logger.debug("Sending notification from properties-ms | type={} to={} data={}", notification_type, to, data)
+            logger.debug(
+                "Sending notification from properties-ms | type={} to={} data={}",
+                notification_type,
+                to,
+                data,
+            )
             await self._client.post(
                 "/notifications/dispatch",
                 json={
@@ -244,9 +253,19 @@ class NotificationsClient:
                 },
                 headers=self._headers(),
             )
-            logger.debug("Successfully sent notification from properties-ms | type={} to={}", notification_type, to)
+            logger.debug(
+                "Successfully sent notification from properties-ms | type={} to={}",
+                notification_type,
+                to,
+            )
         except Exception as exc:
-            logger.error("Failed to send notification from properties-ms | type={} to={} error={}", notification_type, to, exc)
+            logger.error(
+                "Failed to send notification from properties-ms"
+                " | type={} to={} error={}",
+                notification_type,
+                to,
+                exc,
+            )
 
 
 _notifications_client = NotificationsClient()
