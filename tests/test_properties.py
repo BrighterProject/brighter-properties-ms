@@ -62,9 +62,9 @@ class TestListProperties:
         assert resp.status_code == 200
         call_filters = mock_crud.list_properties.call_args[0][0]
         from datetime import date
+
         assert call_filters.available_from == date(2026, 7, 1)
         assert call_filters.available_to == date(2026, 7, 5)
-
 
 
 class TestGetProperty:

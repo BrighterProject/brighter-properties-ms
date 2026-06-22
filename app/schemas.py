@@ -312,12 +312,15 @@ class PropertyUpdate(BaseModel):
 
     @field_validator("translations")
     @classmethod
-    def validate_translation_locales(cls, v: dict[str, TranslationUpdate] | None) -> dict[str, TranslationUpdate] | None:
+    def validate_translation_locales(
+        cls, v: dict[str, TranslationUpdate] | None
+    ) -> dict[str, TranslationUpdate] | None:
         if v is not None:
             for locale in v:
                 if locale not in SUPPORTED_LOCALES:
                     raise ValueError(
-                        f"Unsupported locale '{locale}'; must be one of {SUPPORTED_LOCALES}"
+                        f"Unsupported locale '{locale}';"
+                        f" must be one of {SUPPORTED_LOCALES}"
                     )
         return v
 
@@ -398,7 +401,7 @@ class DatePriceOverrideIn(BaseModel):
     label: str | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")
-    def end_on_or_after_start(self) -> "DatePriceOverrideIn":
+    def end_on_or_after_start(self) -> DatePriceOverrideIn:
         if self.end_date < self.start_date:
             raise ValueError("end_date must be >= start_date")
         return self
@@ -411,7 +414,7 @@ class DatePriceOverrideUpdate(BaseModel):
     label: str | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")
-    def end_on_or_after_start(self) -> "DatePriceOverrideUpdate":
+    def end_on_or_after_start(self) -> DatePriceOverrideUpdate:
         if self.start_date and self.end_date and self.end_date < self.start_date:
             raise ValueError("end_date must be >= start_date")
         return self
