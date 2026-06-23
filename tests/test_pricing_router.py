@@ -130,9 +130,7 @@ def test_put_weekday_prices_owner(owner_client):
                 weekday_price_out(weekday=6, price="90.00"),
             ]
         )
-        resp = owner_client.put(
-            f"/properties/{PROPERTY_ID}/pricing/weekdays", json=payload
-        )
+        resp = owner_client.put(f"/properties/{PROPERTY_ID}/pricing/weekdays", json=payload)
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) == 2
@@ -213,9 +211,7 @@ def test_create_override_owner(owner_client):
         patch("app.routers.pricing.date_override_crud") as mock,
     ):
         mock.create_for_property = AsyncMock(return_value=override_out())
-        resp = owner_client.post(
-            f"/properties/{PROPERTY_ID}/pricing/overrides", json=payload
-        )
+        resp = owner_client.post(f"/properties/{PROPERTY_ID}/pricing/overrides", json=payload)
     assert resp.status_code == 201
     assert resp.json()["label"] == "Christmas"
 
@@ -226,9 +222,7 @@ def test_create_override_invalid_dates_rejected(owner_client):
         "end_date": "2026-12-25",
         "price": "150.00",
     }
-    resp = owner_client.post(
-        f"/properties/{PROPERTY_ID}/pricing/overrides", json=payload
-    )
+    resp = owner_client.post(f"/properties/{PROPERTY_ID}/pricing/overrides", json=payload)
     assert resp.status_code == 422
 
 
@@ -275,9 +269,7 @@ def test_delete_override_owner(owner_client):
         patch("app.routers.pricing.date_override_crud") as mock,
     ):
         mock.delete = AsyncMock(return_value=True)
-        resp = owner_client.delete(
-            f"/properties/{PROPERTY_ID}/pricing/overrides/{OVERRIDE_ID}"
-        )
+        resp = owner_client.delete(f"/properties/{PROPERTY_ID}/pricing/overrides/{OVERRIDE_ID}")
     assert resp.status_code == 204
 
 
@@ -287,9 +279,7 @@ def test_delete_override_not_found(owner_client):
         patch("app.routers.pricing.date_override_crud") as mock,
     ):
         mock.delete = AsyncMock(return_value=False)
-        resp = owner_client.delete(
-            f"/properties/{PROPERTY_ID}/pricing/overrides/{OVERRIDE_ID}"
-        )
+        resp = owner_client.delete(f"/properties/{PROPERTY_ID}/pricing/overrides/{OVERRIDE_ID}")
     assert resp.status_code == 404
 
 
@@ -304,12 +294,8 @@ def test_resolve_returns_breakdown(owner_client):
     property_mock.currency = "EUR"
 
     nights = [
-        MagicMock(
-            date=date(2026, 6, 8), price=Decimal("50.00"), source="base", label=None
-        ),
-        MagicMock(
-            date=date(2026, 6, 9), price=Decimal("75.00"), source="weekday", label=None
-        ),  # noqa: E501
+        MagicMock(date=date(2026, 6, 8), price=Decimal("50.00"), source="base", label=None),
+        MagicMock(date=date(2026, 6, 9), price=Decimal("75.00"), source="weekday", label=None),  # noqa: E501
     ]
 
     with (

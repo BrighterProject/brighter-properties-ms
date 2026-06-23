@@ -14,9 +14,7 @@ from app.schemas import (
     TranslationUpdate,
 )
 
-router = APIRouter(
-    prefix="/properties/{property_id}/translations", tags=["Property Translations"]
-)
+router = APIRouter(prefix="/properties/{property_id}/translations", tags=["Property Translations"])
 
 
 @router.get("", response_model=list[TranslationResponse])

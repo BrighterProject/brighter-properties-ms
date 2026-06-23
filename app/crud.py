@@ -36,6 +36,7 @@ from .schemas import (
     PropertyResponse,
     PropertyStatus,
     PropertyStatusUpdate,
+    PropertyType,
     PropertyUnavailabilityCreate,
     PropertyUnavailabilityResponse,
     PropertyUnavailabilityUpdate,
@@ -99,9 +100,9 @@ class PropertyImageCRUD(CRUD[PropertyImage, PropertyImageResponse]):  # type: ig
         self, property_id: UUID, payload: PropertyImageCreate
     ) -> PropertyImageResponse:
         if payload.is_thumbnail:
-            await PropertyImage.filter(
-                property_id=property_id, is_thumbnail=True
-            ).update(is_thumbnail=False)
+            await PropertyImage.filter(property_id=property_id, is_thumbnail=True).update(
+                is_thumbnail=False
+            )
 
         inst = await PropertyImage.create(
             property_id=property_id,
@@ -119,9 +120,9 @@ class PropertyImageCRUD(CRUD[PropertyImage, PropertyImageResponse]):  # type: ig
         updates = payload.model_dump(exclude_none=True)
 
         if updates.get("is_thumbnail"):
-            await PropertyImage.filter(
-                property_id=property_id, is_thumbnail=True
-            ).update(is_thumbnail=False)
+            await PropertyImage.filter(property_id=property_id, is_thumbnail=True).update(
+                is_thumbnail=False
+            )
 
         await inst.update_from_dict(updates).save()
         return PropertyImageResponse.model_validate(inst, from_attributes=True)
@@ -131,10 +132,7 @@ class PropertyImageCRUD(CRUD[PropertyImage, PropertyImageResponse]):  # type: ig
 
     async def list_for_property(self, property_id: UUID) -> list[PropertyImageResponse]:
         images = await PropertyImage.filter(property_id=property_id).order_by("order")
-        return [
-            PropertyImageResponse.model_validate(img, from_attributes=True)
-            for img in images
-        ]
+        return [PropertyImageResponse.model_validate(img, from_attributes=True) for img in images]
 
     async def replace_for_property(
         self, property_id: UUID, images: list[PropertyImageCreate]
@@ -147,9 +145,7 @@ class PropertyImageCRUD(CRUD[PropertyImage, PropertyImageResponse]):  # type: ig
         self, property_id: UUID, ordered_ids: list[UUID]
     ) -> list[PropertyImageResponse]:
         for position, image_id in enumerate(ordered_ids):
-            await PropertyImage.filter(id=image_id, property_id=property_id).update(
-                order=position
-            )
+            await PropertyImage.filter(id=image_id, property_id=property_id).update(order=position)
         return await self.list_for_property(property_id)
 
 
@@ -159,8 +155,8 @@ class PropertyImageCRUD(CRUD[PropertyImage, PropertyImageResponse]):  # type: ig
 
 
 class PropertyUnavailabilityCRUD(
-    CRUD[PropertyUnavailability, PropertyUnavailabilityResponse]
-):  # type: ignore
+    CRUD[PropertyUnavailability, PropertyUnavailabilityResponse]  # type: ignore
+):
     async def create_for_property(
         self, property_id: UUID, payload: PropertyUnavailabilityCreate
     ) -> PropertyUnavailabilityResponse:
@@ -188,12 +184,8 @@ class PropertyUnavailabilityCRUD(
     async def delete(self, unavailability_id: UUID, property_id: UUID) -> bool:
         return await self.delete_by(id=unavailability_id, property_id=property_id)
 
-    async def list_for_property(
-        self, property_id: UUID
-    ) -> list[PropertyUnavailabilityResponse]:
-        items = await PropertyUnavailability.filter(property_id=property_id).order_by(
-            "start_date"
-        )
+    async def list_for_property(self, property_id: UUID) -> list[PropertyUnavailabilityResponse]:
+        items = await PropertyUnavailability.filter(property_id=property_id).order_by("start_date")
         return [
             PropertyUnavailabilityResponse.model_validate(item, from_attributes=True)
             for item in items
@@ -227,9 +219,7 @@ class PropertyTranslationCRUD(CRUD[PropertyTranslation, TranslationResponse]):  
         locale: str,
         payload: TranslationUpdate,
     ) -> TranslationResponse | None:
-        inst = await PropertyTranslation.get_or_none(
-            property_id=property_id, locale=locale
-        )
+        inst = await PropertyTranslation.get_or_none(property_id=property_id, locale=locale)
         if not inst:
             return None
 
@@ -237,9 +227,7 @@ class PropertyTranslationCRUD(CRUD[PropertyTranslation, TranslationResponse]):  
         return TranslationResponse.model_validate(inst, from_attributes=True)
 
     async def delete(self, property_id: UUID, locale: str) -> bool:
-        count = await PropertyTranslation.filter(
-            property_id=property_id, locale=locale
-        ).delete()
+        count = await PropertyTranslation.filter(property_id=property_id, locale=locale).delete()
         return count > 0
 
     async def upsert_for_property(
@@ -247,9 +235,7 @@ class PropertyTranslationCRUD(CRUD[PropertyTranslation, TranslationResponse]):  
     ) -> None:
         for locale, tr in translations.items():
             tr_dict = tr.model_dump(exclude_none=True)
-            existing = await PropertyTranslation.get_or_none(
-                property_id=property_id, locale=locale
-            )
+            existing = await PropertyTranslation.get_or_none(property_id=property_id, locale=locale)
             if existing:
                 if tr_dict:
                     await existing.update_from_dict(tr_dict).save()
@@ -260,13 +246,8 @@ class PropertyTranslationCRUD(CRUD[PropertyTranslation, TranslationResponse]):  
                     )
 
     async def list_for_property(self, property_id: UUID) -> list[TranslationResponse]:
-        items = await PropertyTranslation.filter(property_id=property_id).order_by(
-            "locale"
-        )
-        return [
-            TranslationResponse.model_validate(item, from_attributes=True)
-            for item in items
-        ]
+        items = await PropertyTranslation.filter(property_id=property_id).order_by("locale")
+        return [TranslationResponse.model_validate(item, from_attributes=True) for item in items]
 
 
 # ---------------------------------------------------------------------------
@@ -283,9 +264,7 @@ PREFETCH = (
 
 
 class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
-    async def create_property(
-        self, payload: PropertyCreate, owner_id: UUID
-    ) -> PropertyResponse:
+    async def create_property(self, payload: PropertyCreate, owner_id: UUID) -> PropertyResponse:
         property_data = payload.model_dump(exclude={"translations", "images"})
         inst = await Property.create(owner_id=owner_id, **property_data)
         await inst.fetch_related(*PREFETCH)
@@ -301,9 +280,7 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         if not inst:
             return None
 
-        property_fields = payload.model_dump(
-            exclude_none=True, exclude={"translations", "images"}
-        )
+        property_fields = payload.model_dump(exclude_none=True, exclude={"translations", "images"})
         if property_fields:
             await inst.update_from_dict(property_fields).save()
 
@@ -340,9 +317,7 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         self, property_id: UUID, owner_id: UUID
     ) -> PropertyResponse | None:
         try:
-            inst = await Property.get(
-                id=property_id, owner_id=owner_id
-            ).prefetch_related(*PREFETCH)
+            inst = await Property.get(id=property_id, owner_id=owner_id).prefetch_related(*PREFETCH)
         except DoesNotExist:
             return None
         return PropertyResponse.model_validate(inst, from_attributes=True)
@@ -350,9 +325,7 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
     async def get_properties_by_ids(
         self, ids: list[UUID], locale: str = settings.DEFAULT_LOCALE
     ) -> list[PropertyListItem]:
-        properties = await Property.filter(id__in=ids).prefetch_related(
-            "images", "translations"
-        )
+        properties = await Property.filter(id__in=ids).prefetch_related("images", "translations")
         results: list[PropertyListItem] = []
         for v in properties:
             thumbnail = next(
@@ -366,7 +339,7 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                     name=tr.name if tr else FALLBACK_NAME,
                     description=tr.description if tr else "",
                     city=v.city,
-                    property_type=v.property_type,
+                    property_type=PropertyType(v.property_type),
                     status=PropertyStatus(v.status),
                     price_per_night=v.price_per_night,
                     currency=v.currency,
@@ -446,7 +419,7 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                     name=tr.name if tr else FALLBACK_NAME,
                     description=tr.description if tr else "",
                     city=v.city,
-                    property_type=v.property_type,
+                    property_type=PropertyType(v.property_type),
                     status=PropertyStatus(v.status),
                     price_per_night=v.price_per_night,
                     currency=v.currency,
@@ -466,9 +439,7 @@ property_image_crud = PropertyImageCRUD(PropertyImage, PropertyImageResponse)
 property_unavailability_crud = PropertyUnavailabilityCRUD(
     PropertyUnavailability, PropertyUnavailabilityResponse
 )
-property_translation_crud = PropertyTranslationCRUD(
-    PropertyTranslation, TranslationResponse
-)
+property_translation_crud = PropertyTranslationCRUD(PropertyTranslation, TranslationResponse)
 
 
 # ---------------------------------------------------------------------------
@@ -478,9 +449,7 @@ property_translation_crud = PropertyTranslationCRUD(
 
 class WeekdayPriceCRUD(CRUD[PropertyWeekdayPrice, WeekdayPriceOut]):  # type: ignore
     async def list_for_property(self, property_id: UUID) -> list[WeekdayPriceOut]:
-        items = await PropertyWeekdayPrice.filter(property_id=property_id).order_by(
-            "weekday"
-        )
+        items = await PropertyWeekdayPrice.filter(property_id=property_id).order_by("weekday")
         return [WeekdayPriceOut.model_validate(i, from_attributes=True) for i in items]
 
     async def upsert_all(
@@ -497,9 +466,7 @@ class WeekdayPriceCRUD(CRUD[PropertyWeekdayPrice, WeekdayPriceOut]):  # type: ig
             )
             created.append(inst)
         created.sort(key=lambda x: x.weekday)
-        return [
-            WeekdayPriceOut.model_validate(i, from_attributes=True) for i in created
-        ]
+        return [WeekdayPriceOut.model_validate(i, from_attributes=True) for i in created]
 
 
 # ---------------------------------------------------------------------------
@@ -520,9 +487,7 @@ class DatePriceOverrideCRUD(CRUD[PropertyDatePriceOverride, DatePriceOverrideOut
         if to_date:
             qs = qs.filter(start_date__lte=to_date)
         items = await qs.order_by("start_date", "created_at")
-        return [
-            DatePriceOverrideOut.model_validate(i, from_attributes=True) for i in items
-        ]
+        return [DatePriceOverrideOut.model_validate(i, from_attributes=True) for i in items]
 
     async def create_for_property(
         self, property_id: UUID, payload: DatePriceOverrideIn
@@ -535,9 +500,7 @@ class DatePriceOverrideCRUD(CRUD[PropertyDatePriceOverride, DatePriceOverrideOut
     async def update(
         self, override_id: UUID, property_id: UUID, payload: DatePriceOverrideUpdate
     ) -> DatePriceOverrideOut | None:
-        inst = await PropertyDatePriceOverride.get_or_none(
-            id=override_id, property_id=property_id
-        )
+        inst = await PropertyDatePriceOverride.get_or_none(id=override_id, property_id=property_id)
         if not inst:
             return None
         await inst.update_from_dict(payload.model_dump(exclude_none=True)).save()
@@ -548,9 +511,7 @@ class DatePriceOverrideCRUD(CRUD[PropertyDatePriceOverride, DatePriceOverrideOut
 
 
 weekday_price_crud = WeekdayPriceCRUD(PropertyWeekdayPrice, WeekdayPriceOut)
-date_override_crud = DatePriceOverrideCRUD(
-    PropertyDatePriceOverride, DatePriceOverrideOut
-)
+date_override_crud = DatePriceOverrideCRUD(PropertyDatePriceOverride, DatePriceOverrideOut)
 
 
 async def assert_owns_property(property_id: UUID, current_user: CurrentUser) -> None:
@@ -559,9 +520,7 @@ async def assert_owns_property(property_id: UUID, current_user: CurrentUser) -> 
         return
     property = await property_crud.get_property(property_id)
     if not property:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Property not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Property not found")
     if property.owner_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

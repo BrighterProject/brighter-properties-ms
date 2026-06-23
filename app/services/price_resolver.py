@@ -55,9 +55,7 @@ def resolve_prices_sync(
     for i in range(num_nights):
         night = start_date + timedelta(days=i)
 
-        matching = [
-            ov for ov in date_overrides if ov.start_date <= night <= ov.end_date
-        ]
+        matching = [ov for ov in date_overrides if ov.start_date <= night <= ov.end_date]
         if matching:
             best = matching[-1]
             results.append(
@@ -78,9 +76,7 @@ def resolve_prices_sync(
                 )
             )
         else:
-            results.append(
-                ResolvedNight(date=night, price=base_price, source="base", label=None)
-            )
+            results.append(ResolvedNight(date=night, price=base_price, source="base", label=None))
 
     return results
 
@@ -94,9 +90,7 @@ async def resolve_prices_for_property(
     """Load rules from DB and resolve prices for a property."""
     from app.models import PropertyDatePriceOverride, PropertyWeekdayPrice
 
-    weekday_rules = await PropertyWeekdayPrice.filter(property_id=property_id).order_by(
-        "weekday"
-    )
+    weekday_rules = await PropertyWeekdayPrice.filter(property_id=property_id).order_by("weekday")
     date_overrides = await PropertyDatePriceOverride.filter(
         property_id=property_id,
         start_date__lte=end_date,

@@ -61,9 +61,7 @@ class TranslationBase(BaseModel):
     @classmethod
     def validate_locale(cls, v: str) -> str:
         if v not in SUPPORTED_LOCALES:
-            raise ValueError(
-                f"Unsupported locale '{v}'; must be one of {SUPPORTED_LOCALES}"
-            )
+            raise ValueError(f"Unsupported locale '{v}'; must be one of {SUPPORTED_LOCALES}")
         return v
 
 
@@ -254,9 +252,7 @@ class PropertyCreate(PropertyBase):
 
     @field_validator("translations")
     @classmethod
-    def validate_translations(
-        cls, v: list[TranslationCreate]
-    ) -> list[TranslationCreate]:
+    def validate_translations(cls, v: list[TranslationCreate]) -> list[TranslationCreate]:
         locales = [t.locale for t in v]
         if len(locales) != len(set(locales)):
             raise ValueError("Duplicate locales in translations")
@@ -319,8 +315,7 @@ class PropertyUpdate(BaseModel):
             for locale in v:
                 if locale not in SUPPORTED_LOCALES:
                     raise ValueError(
-                        f"Unsupported locale '{locale}';"
-                        f" must be one of {SUPPORTED_LOCALES}"
+                        f"Unsupported locale '{locale}'; must be one of {SUPPORTED_LOCALES}"
                     )
         return v
 
@@ -491,9 +486,7 @@ class PropertyFilters(BaseModel):
         has_from = self.available_from is not None
         has_to = self.available_to is not None
         if has_from != has_to:
-            raise ValueError(
-                "available_from and available_to must be provided together"
-            )
+            raise ValueError("available_from and available_to must be provided together")
         if has_from and has_to and self.available_from >= self.available_to:  # type: ignore[operator]
             raise ValueError("available_from must be before available_to")
         return self

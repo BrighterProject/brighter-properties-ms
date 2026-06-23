@@ -84,9 +84,7 @@ async def get_properties_bulk(
 async def get_property(request: Request, property_id: UUID, response: Response):
     property = await property_crud.get_property(property_id)
     if not property:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Property not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Property not found")
     response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=120"
     return property
 
@@ -116,9 +114,7 @@ async def update_property(
     if payload.images is not None:
         await property_image_crud.replace_for_property(property_id, payload.images)
     if payload.translations is not None:
-        await property_translation_crud.upsert_for_property(
-            property_id, payload.translations
-        )
+        await property_translation_crud.upsert_for_property(property_id, payload.translations)
 
     if payload.images is not None or payload.translations is not None:
         return await property_crud.get_property(property_id)
@@ -140,14 +136,10 @@ async def update_property_status(
 ):
     property = await property_crud.update_status(property_id, payload)
     if not property:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Property not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Property not found")
 
     if payload.status == PropertyStatus.ACTIVE:
-        asyncio.create_task(
-            _notify_property_approved(property, users_client, notifications_client)
-        )
+        asyncio.create_task(_notify_property_approved(property, users_client, notifications_client))
 
     return property
 
@@ -178,9 +170,7 @@ async def delete_property(
     if is_admin:
         deleted = await property_crud.admin_delete_property(property_id)
     else:
-        deleted = await property_crud.delete_property(
-            property_id, owner_id=current_user.id
-        )
+        deleted = await property_crud.delete_property(property_id, owner_id=current_user.id)
 
     if not deleted:
         raise HTTPException(

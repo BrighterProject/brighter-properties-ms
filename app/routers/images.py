@@ -76,9 +76,7 @@ async def update_image(
     await assert_owns_property(property_id, current_user)
     img = await property_image_crud.update(image_id, property_id, payload)
     if not img:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Image not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
     return img
 
 
@@ -93,9 +91,7 @@ async def delete_image(
     await assert_owns_property(property_id, current_user)
     deleted = await property_image_crud.delete(image_id, property_id)
     if not deleted:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Image not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
 
 
 @router.put("/reorder", response_model=list[PropertyImageResponse])

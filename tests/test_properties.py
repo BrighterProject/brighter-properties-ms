@@ -112,9 +112,7 @@ class TestCreateProperty:
             mock_crud.get_property = AsyncMock(return_value=created)
             mock_tr.create_for_property = AsyncMock()
             mock_img.create_for_property = AsyncMock()
-            client_factory(make_user(user_id=OWNER_ID)).post(
-                "/properties", json=payload
-            )
+            client_factory(make_user(user_id=OWNER_ID)).post("/properties", json=payload)
         _, kwargs = mock_crud.create_property.call_args
         assert kwargs["owner_id"] == OWNER_ID
 
@@ -147,31 +145,21 @@ class TestUpdateProperty:
 
     def test_owner_can_update_own_property(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
-            mock_crud.update_property = AsyncMock(
-                return_value=property_response(city="Plovdiv")
-            )
-            resp = client_factory(make_user()).patch(
-                f"/properties/{PROPERTY_ID}", json=self.PATCH
-            )
+            mock_crud.update_property = AsyncMock(return_value=property_response(city="Plovdiv"))
+            resp = client_factory(make_user()).patch(f"/properties/{PROPERTY_ID}", json=self.PATCH)
         assert resp.status_code == 200
         assert resp.json()["city"] == "Plovdiv"
 
     def test_returns_404_when_not_owner(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
             mock_crud.update_property = AsyncMock(return_value=None)
-            resp = client_factory(make_user()).patch(
-                f"/properties/{PROPERTY_ID}", json=self.PATCH
-            )
+            resp = client_factory(make_user()).patch(f"/properties/{PROPERTY_ID}", json=self.PATCH)
         assert resp.status_code == 404
 
     def test_admin_bypasses_ownership(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
-            mock_crud.update_property = AsyncMock(
-                return_value=property_response(city="Admin Edit")
-            )
-            resp = client_factory(make_admin()).patch(
-                f"/properties/{PROPERTY_ID}", json=self.PATCH
-            )
+            mock_crud.update_property = AsyncMock(return_value=property_response(city="Admin Edit"))
+            resp = client_factory(make_admin()).patch(f"/properties/{PROPERTY_ID}", json=self.PATCH)
         assert resp.status_code == 200
         _, kwargs = mock_crud.update_property.call_args
         assert kwargs["owner_id"] is None
@@ -179,18 +167,14 @@ class TestUpdateProperty:
     def test_admin_404_when_property_missing(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
             mock_crud.update_property = AsyncMock(return_value=None)
-            resp = client_factory(make_admin()).patch(
-                f"/properties/{PROPERTY_ID}", json=self.PATCH
-            )
+            resp = client_factory(make_admin()).patch(f"/properties/{PROPERTY_ID}", json=self.PATCH)
         assert resp.status_code == 404
 
 
 class TestUpdatePropertyStatus:
     def test_admin_can_change_status(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
-            mock_crud.update_status = AsyncMock(
-                return_value=property_response(status="inactive")
-            )
+            mock_crud.update_status = AsyncMock(return_value=property_response(status="inactive"))
             resp = client_factory(make_admin()).patch(
                 f"/properties/{PROPERTY_ID}/status", json={"status": "inactive"}
             )
@@ -212,9 +196,7 @@ class TestUpdatePropertyStatus:
         anon_app.dependency_overrides[get_current_user] = _non_admin_user
 
         with TestClient(anon_app) as client:
-            resp = client.patch(
-                f"/properties/{PROPERTY_ID}/status", json={"status": "inactive"}
-            )
+            resp = client.patch(f"/properties/{PROPERTY_ID}/status", json={"status": "inactive"})
 
         assert resp.status_code == 403
 

@@ -54,9 +54,7 @@ class Property(Model):
     id = fields.UUIDField(primary_key=True)
 
     property_type = fields.CharEnumField(PropertyType, default=PropertyType.APARTMENT)
-    status = fields.CharEnumField(
-        PropertyStatus, default=PropertyStatus.PENDING_APPROVAL
-    )
+    status = fields.CharEnumField(PropertyStatus, default=PropertyStatus.PENDING_APPROVAL)
 
     owner_id = fields.UUIDField()
 
@@ -74,9 +72,7 @@ class Property(Model):
     bedrooms = fields.IntField(default=1)
     bathrooms = fields.IntField(default=1)
     beds = fields.IntField(default=1)
-    rooms = fields.JSONField(
-        default=list
-    )  # list[RoomEntry] — structured room/bed inventory
+    rooms = fields.JSONField(default=list)  # list[RoomEntry] — structured room/bed inventory
 
     # Features
     has_parking = fields.BooleanField(default=False)
@@ -108,7 +104,7 @@ class Property(Model):
     weekday_prices: fields.ReverseRelation["PropertyWeekdayPrice"]
     date_price_overrides: fields.ReverseRelation["PropertyDatePriceOverride"]
 
-    class Meta:  # type: ignore
+    class Meta:
         table = "properties"
         ordering = ["-created_at"]
 
@@ -131,7 +127,7 @@ class PropertyTranslation(Model):
     address = fields.CharField(max_length=500)
     house_rules = fields.TextField(null=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         table = "property_translations"
         unique_together = (("property", "locale"),)
         ordering = ["locale"]
@@ -146,7 +142,7 @@ class PropertyImage(Model):
     is_thumbnail = fields.BooleanField(default=False)
     order = fields.IntField(default=0)
 
-    class Meta:  # type: ignore
+    class Meta:
         table = "property_images"
         ordering = ["order"]
 
@@ -162,7 +158,7 @@ class PropertyUnavailability(Model):
     end_date = fields.DateField()
     reason = fields.CharField(max_length=255, null=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         table = "property_unavailabilities"
 
 
@@ -178,7 +174,7 @@ class PropertyWeekdayPrice(Model):
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         table = "property_weekday_prices"
         unique_together = (("property", "weekday"),)
         ordering = ["weekday"]
@@ -198,6 +194,6 @@ class PropertyDatePriceOverride(Model):
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         table = "property_date_price_overrides"
         ordering = ["start_date", "created_at"]

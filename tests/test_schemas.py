@@ -156,9 +156,7 @@ class TestPropertyFiltersDateRange:
     def test_valid_date_range(self):
         from datetime import date
 
-        f = PropertyFilters(
-            available_from=date(2026, 7, 1), available_to=date(2026, 7, 5)
-        )
+        f = PropertyFilters(available_from=date(2026, 7, 1), available_to=date(2026, 7, 5))
         assert f.available_from == date(2026, 7, 1)
         assert f.available_to == date(2026, 7, 5)
 
@@ -178,17 +176,13 @@ class TestPropertyFiltersDateRange:
         from datetime import date
 
         with pytest.raises(ValidationError, match="before"):
-            PropertyFilters(
-                available_from=date(2026, 7, 1), available_to=date(2026, 7, 1)
-            )
+            PropertyFilters(available_from=date(2026, 7, 1), available_to=date(2026, 7, 1))
 
     def test_available_from_after_to_raises(self):
         from datetime import date
 
         with pytest.raises(ValidationError, match="before"):
-            PropertyFilters(
-                available_from=date(2026, 7, 5), available_to=date(2026, 7, 1)
-            )
+            PropertyFilters(available_from=date(2026, 7, 5), available_to=date(2026, 7, 1))
 
     def test_neither_date_is_valid(self):
         f = PropertyFilters()
