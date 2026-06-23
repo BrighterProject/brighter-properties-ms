@@ -7,9 +7,6 @@ from unittest.mock import AsyncMock, patch
 from app.schemas import PropertyResponse
 
 from .factories import (
-    OWNER_ID,
-    PROPERTY_ID,
-    make_user,
     property_create_payload,
     property_response,
 )

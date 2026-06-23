@@ -38,10 +38,11 @@ check = "bash scripts/check.sh"
 [tool.ruff]
 line-length = 88
 target-version = "py313"
+exclude = ["migrations"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
-ignore = ["B008"]  # Depends() in FastAPI function defaults is intentional
+ignore = ["B008", "E501"]  # B008: Depends() in FastAPI defaults; E501: long strings/SQL/log messages
 
 [tool.pytest.ini_options]
 addopts = "-v -m 'not integration'"

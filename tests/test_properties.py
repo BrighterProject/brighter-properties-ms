@@ -63,9 +63,9 @@ class TestListProperties:
         assert resp.status_code == 200
         call_filters = mock_crud.list_properties.call_args[0][0]
         from datetime import date
+
         assert call_filters.available_from == date(2026, 7, 1)
         assert call_filters.available_to == date(2026, 7, 5)
-
 
 
 class TestGetProperty:
@@ -282,9 +282,14 @@ def _build_quota_app(current_user, payments_can_add: bool):
         return current_user
 
     for dep in (
-        can_read_properties, can_read_own_properties, can_write_or_admin,
-        can_delete_or_admin, can_images_or_admin, can_schedule_or_admin,
-        can_admin_write, get_current_user,
+        can_read_properties,
+        can_read_own_properties,
+        can_write_or_admin,
+        can_delete_or_admin,
+        can_images_or_admin,
+        can_schedule_or_admin,
+        can_admin_write,
+        get_current_user,
     ):
         app.dependency_overrides[dep] = _user
 

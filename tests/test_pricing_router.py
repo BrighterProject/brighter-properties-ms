@@ -22,14 +22,13 @@ from app.deps import (
 )
 from app.limiter import limiter
 from app.routers.pricing import router
+from app.scopes import PropertyScope
 from tests.factories import (
-    OWNER_ID,
     PROPERTY_ID,
     make_admin,
     make_user,
     make_user_without_scopes,
 )
-from app.scopes import PropertyScope
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -141,17 +140,13 @@ def test_put_weekday_prices_owner(owner_client):
 
 def test_put_weekday_prices_duplicate_weekday_rejected(owner_client):
     payload = [{"weekday": 0, "price": "90.00"}, {"weekday": 0, "price": "95.00"}]
-    resp = owner_client.put(
-        f"/properties/{PROPERTY_ID}/pricing/weekdays", json=payload
-    )
+    resp = owner_client.put(f"/properties/{PROPERTY_ID}/pricing/weekdays", json=payload)
     assert resp.status_code == 422
 
 
 def test_put_weekday_prices_invalid_weekday_rejected(owner_client):
     payload = [{"weekday": 7, "price": "90.00"}]
-    resp = owner_client.put(
-        f"/properties/{PROPERTY_ID}/pricing/weekdays", json=payload
-    )
+    resp = owner_client.put(f"/properties/{PROPERTY_ID}/pricing/weekdays", json=payload)
     assert resp.status_code == 422
 
 
@@ -309,13 +304,21 @@ def test_resolve_returns_breakdown(owner_client):
     property_mock.currency = "EUR"
 
     nights = [
-        MagicMock(date=date(2026, 6, 8), price=Decimal("50.00"), source="base", label=None),
-        MagicMock(date=date(2026, 6, 9), price=Decimal("75.00"), source="weekday", label=None),
+        MagicMock(
+            date=date(2026, 6, 8), price=Decimal("50.00"), source="base", label=None
+        ),
+        MagicMock(
+            date=date(2026, 6, 9), price=Decimal("75.00"), source="weekday", label=None
+        ),
     ]
 
     with (
         patch("app.routers.pricing.Property") as MockProperty,
-        patch("app.routers.pricing.resolve_prices_for_property", new_callable=AsyncMock, return_value=nights),
+        patch(
+            "app.routers.pricing.resolve_prices_for_property",
+            new_callable=AsyncMock,
+            return_value=nights,
+        ),
     ):
         MockProperty.get_or_none = AsyncMock(return_value=property_mock)
         resp = owner_client.get(

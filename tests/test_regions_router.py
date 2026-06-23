@@ -35,9 +35,7 @@ def test_combined_search_returns_oblasts_and_settlements() -> None:
 
 
 def test_combined_search_oblasts_listed_first() -> None:
-    items = _client().get(
-        "/regions/search", params={"q": "sofia", "lang": "en"}
-    ).json()
+    items = _client().get("/regions/search", params={"q": "sofia", "lang": "en"}).json()
     first_settlement = next(
         (i for i, it in enumerate(items) if it["kind"] == "settlement"), len(items)
     )
@@ -48,9 +46,7 @@ def test_combined_search_oblasts_listed_first() -> None:
 
 
 def test_combined_search_shape() -> None:
-    items = _client().get(
-        "/regions/search", params={"q": "sofia", "lang": "en"}
-    ).json()
+    items = _client().get("/regions/search", params={"q": "sofia", "lang": "en"}).json()
     for item in items:
         assert set(item) == {"kind", "code", "name", "tvm"}
         if item["kind"] == "oblast":
@@ -58,7 +54,9 @@ def test_combined_search_shape() -> None:
 
 
 def test_combined_search_respects_limit() -> None:
-    items = _client().get(
-        "/regions/search", params={"q": "a", "lang": "en", "limit": 5}
-    ).json()
+    items = (
+        _client()
+        .get("/regions/search", params={"q": "a", "lang": "en", "limit": 5})
+        .json()
+    )
     assert len(items) <= 5

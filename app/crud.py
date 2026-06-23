@@ -424,7 +424,8 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                     rows = await conn.execute_query_dict(
                         """
                         SELECT property_id::text AS pid,
-                               MAX(TS_RANK(search_vector, WEBSEARCH_TO_TSQUERY($1::regconfig, $2))) AS rank
+                               MAX(TS_RANK(search_vector,
+                                   WEBSEARCH_TO_TSQUERY($1::regconfig, $2))) AS rank
                         FROM property_translations
                         WHERE search_vector @@ WEBSEARCH_TO_TSQUERY($1::regconfig, $2)
                           AND locale = $3

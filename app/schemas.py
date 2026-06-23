@@ -20,7 +20,6 @@ from app.models import SUPPORTED_LOCALES
 from app.models import AmenityType as AmenityType
 from app.settings import DEFAULT_LOCALE
 
-
 PaymentMethodOption = Literal["card", "bank_transfer", "cash"]
 
 
@@ -213,7 +212,9 @@ class PropertyBase(BaseModel):
     # Location
     region_code: str | None = Field(default=None, max_length=10)
     settlement_ekatte: str | None = Field(default=None, max_length=10)
-    city: str | None = Field(default=None, max_length=100)  # legacy; derived from settlement on read
+    city: str | None = Field(
+        default=None, max_length=100
+    )  # legacy; derived from settlement on read
     latitude: Decimal | None = Field(default=None, ge=-90, le=90, decimal_places=6)
     longitude: Decimal | None = Field(default=None, ge=-180, le=180, decimal_places=6)
 
@@ -248,7 +249,9 @@ class PropertyBase(BaseModel):
 
     # Gap filler
     enable_gap_filler: bool = False
-    gap_tax_pct: Decimal = Field(default=Decimal("0"), ge=Decimal("-100"), le=Decimal("100"))
+    gap_tax_pct: Decimal = Field(
+        default=Decimal("0"), ge=Decimal("-100"), le=Decimal("100")
+    )
     gap_last_minute_window: int = Field(default=7, ge=1, le=90)
     gap_adjacent_only: bool = True
 
@@ -359,7 +362,9 @@ class PropertyUpdate(BaseModel):
 
     @field_validator("translations")
     @classmethod
-    def validate_translation_locales(cls, v: dict[str, TranslationUpdate] | None) -> dict[str, TranslationUpdate] | None:
+    def validate_translation_locales(
+        cls, v: dict[str, TranslationUpdate] | None
+    ) -> dict[str, TranslationUpdate] | None:
         if v is not None:
             for locale in v:
                 if locale not in SUPPORTED_LOCALES:
@@ -449,7 +454,7 @@ class DatePriceOverrideIn(BaseModel):
     label: str | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")
-    def end_on_or_after_start(self) -> "DatePriceOverrideIn":
+    def end_on_or_after_start(self) -> DatePriceOverrideIn:
         if self.end_date < self.start_date:
             raise ValueError("end_date must be >= start_date")
         return self
@@ -462,7 +467,7 @@ class DatePriceOverrideUpdate(BaseModel):
     label: str | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")
-    def end_on_or_after_start(self) -> "DatePriceOverrideUpdate":
+    def end_on_or_after_start(self) -> DatePriceOverrideUpdate:
         if self.start_date and self.end_date and self.end_date < self.start_date:
             raise ValueError("end_date must be >= start_date")
         return self

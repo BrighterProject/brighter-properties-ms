@@ -10,11 +10,11 @@ import os
 # Disable slowapi rate limiting in tests — must be set before app.limiter is imported.
 os.environ["SLOWAPI_NO_LIMITS"] = "true"
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from unittest.mock import AsyncMock, MagicMock
 
 from app.deps import (
     can_admin_write,

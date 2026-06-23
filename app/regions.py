@@ -23,7 +23,9 @@ class SettlementEntry(TypedDict):
 
 @lru_cache(maxsize=1)
 def _oblasts() -> list[OblastEntry]:
-    raw: list[dict] = json.loads((_DATA_DIR / "ek_obl.json").read_text(encoding="utf-8"))
+    raw: list[dict] = json.loads(
+        (_DATA_DIR / "ek_obl.json").read_text(encoding="utf-8")
+    )
     return [
         OblastEntry(code=e["oblast"], name=e["name"], name_en=e["name_en"])
         for e in raw
