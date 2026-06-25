@@ -164,3 +164,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 .worktrees/
+
+# GeoNames Bulgaria dump — build input for processing/geocode_settlements.py.
+# Only the generated processing/ekatte_coords.json is committed.
+processing/BG.zip

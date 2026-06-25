@@ -1,10 +1,11 @@
 from typing import Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from app.regions import (
     get_oblasts,
+    get_settlement,
     get_settlements,
     search_oblasts,
     search_settlements,
@@ -23,6 +24,20 @@ class SettlementResponse(BaseModel):
     ekatte: str
     tvm: str | None
     name: str
+
+
+class SettlementCenterResponse(BaseModel):
+    """Approximate centroid of a settlement, for centering the map on selection.
+
+    Coordinates are best-effort (see ``processing/geocode_settlements.py``) and
+    may be ``None`` for the long tail of villages; clients fall back to the
+    Sofia center in that case.
+    """
+
+    ekatte: str
+    name: str
+    lat: float | None
+    lon: float | None
 
 
 class DestinationResponse(BaseModel):
@@ -63,6 +78,25 @@ async def search_settlements_endpoint(
         )
         for s in search_settlements(q, lang, limit)
     ]
+
+
+@router.get("/settlements/{ekatte}", response_model=SettlementCenterResponse)
+async def get_settlement_center(
+    ekatte: str,
+    lang: str = Query(default=DEFAULT_LOCALE, max_length=5),
+):
+    """Return the approximate map center for a settlement by EKATTE code."""
+    settlement = get_settlement(ekatte)
+    if settlement is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Settlement not found"
+        )
+    return SettlementCenterResponse(
+        ekatte=settlement["ekatte"],
+        name=settlement["name_en"] if lang == "en" else settlement["name"],
+        lat=settlement.get("lat"),
+        lon=settlement.get("lon"),
+    )
 
 
 @router.get("/search", response_model=list[DestinationResponse])

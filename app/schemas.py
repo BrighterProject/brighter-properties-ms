@@ -415,6 +415,8 @@ class PropertyListItem(BaseModel):
     region_code: str | None
     settlement_ekatte: str | None
     city: str | None  # resolved settlement name in requested locale
+    latitude: Decimal | None = None
+    longitude: Decimal | None = None
     property_type: PropertyType
     status: PropertyStatus
     price_per_night: Decimal
