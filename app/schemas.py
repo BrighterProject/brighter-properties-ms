@@ -369,7 +369,8 @@ class PropertyUpdate(BaseModel):
             for locale in v:
                 if locale not in SUPPORTED_LOCALES:
                     raise ValueError(
-                        f"Unsupported locale '{locale}'; must be one of {SUPPORTED_LOCALES}"
+                        f"Unsupported locale '{locale}';"
+                        f" must be one of {SUPPORTED_LOCALES}"
                     )
         return v
 

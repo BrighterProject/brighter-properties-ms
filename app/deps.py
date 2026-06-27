@@ -265,7 +265,8 @@ class NotificationsClient:
             )
         except Exception as exc:
             logger.error(
-                "Failed to send notification from properties-ms | type={} to={} error={}",
+                "Failed to send notification from properties-ms"
+                " | type={} to={} error={}",
                 notification_type,
                 to,
                 exc,

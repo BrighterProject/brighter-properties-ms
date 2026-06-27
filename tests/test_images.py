@@ -29,7 +29,7 @@
 #     def test_list_images_returns_200(self, client_factory):
 #         with patch("property_router.property_image_crud") as mock:
 #             mock.list_for_property = AsyncMock(return_value=[image_response()])
-#             resp = client_factory(make_user()).get(f"/properties/{PROPERTY_ID}/images")
+#             resp = client_factory(make_user()).get(f"/properties/{PROPERTY_ID}/images")  # noqa: E501
 #         assert resp.status_code == 200
 #         assert len(resp.json()) == 1
 #
