@@ -10,6 +10,8 @@ import os
 # Disable slowapi rate limiting in tests — must be set before app.limiter is imported.
 os.environ["SLOWAPI_NO_LIMITS"] = "true"
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -23,6 +25,7 @@ from app.deps import (
     can_schedule_or_admin,
     can_write_or_admin,
     get_current_user,
+    get_payments_client,
 )
 from app.limiter import limiter
 from app.routers.property import router
@@ -58,6 +61,11 @@ def build_app(current_user) -> FastAPI:
         get_current_user,
     ):
         app.dependency_overrides[dep] = _user
+
+    # Default: subscription quota approved (tests that need rejection build their own app)
+    _permissive_pc = MagicMock()
+    _permissive_pc.can_add_listing = AsyncMock(return_value=True)
+    app.dependency_overrides[get_payments_client] = lambda: _permissive_pc
 
     return app
 

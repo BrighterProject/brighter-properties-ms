@@ -8,11 +8,13 @@ from app.crud import property_crud, property_image_crud, property_translation_cr
 from app.deps import (
     CurrentUser,
     NotificationsClient,
+    PaymentsClient,
     UsersClient,
     can_admin_write,
     can_delete_or_admin,
     can_write_or_admin,
     get_notifications_client,
+    get_payments_client,
     get_users_client,
 )
 from app.limiter import limiter
@@ -53,7 +55,16 @@ async def create_property(
     request: Request,
     payload: PropertyCreate,
     current_user: CurrentUser = Depends(can_write_or_admin),
+    payments_client: PaymentsClient = Depends(get_payments_client),
 ):
+    if not current_user.is_admin:
+        current_count = await property_crud.count_by_owner(current_user.id)
+        allowed = await payments_client.can_add_listing(current_user.id, current_count)
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Active subscription required to add listings. Upgrade your plan.",
+            )
     created = await property_crud.create_property(payload, owner_id=current_user.id)
 
     for tr in payload.translations:
@@ -98,11 +109,27 @@ async def update_property(
     property_id: UUID,
     payload: PropertyUpdate,
     current_user: CurrentUser = Depends(can_write_or_admin),
+    payments_client: PaymentsClient = Depends(get_payments_client),
 ):
     is_admin = (
         PropertyScope.ADMIN_WRITE in current_user.scopes
         or PropertyScope.ADMIN in current_user.scopes
     )
+
+    if payload.payment_config is not None and not is_admin:
+        caps = await payments_client.get_payment_capabilities()
+        methods = payload.payment_config.accepted_methods
+        if "card" in methods and not caps.get("can_accept_card"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Card payments require an active Stripe Connect account with no outstanding requirements.",
+            )
+        if "bank_transfer" in methods and not caps.get("can_accept_bank_transfer"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bank transfer payments require a bank account to be configured.",
+            )
+
     updated = await property_crud.update_property(
         property_id, payload, owner_id=None if is_admin else current_user.id
     )
@@ -155,12 +182,15 @@ async def update_property_status(
 async def _notify_property_approved(
     property, users_client: UsersClient, nc: NotificationsClient
 ) -> None:
-    owner_email = await users_client.get_email(property.owner_id)
+    owner_email, owner_locale = await users_client.get_email_and_locale(
+        property.owner_id
+    )
     if not owner_email:
         return
     await nc.send(
         to=owner_email,
         notification_type="property_approved",
+        locale=owner_locale,
     )
 
 

@@ -143,6 +143,8 @@ def property_list_item(**overrides) -> dict:
         id=str(PROPERTY_ID),
         name="Cozy Apartment",
         description="A cozy apartment in Sofia.",
+        region_code="SFO",
+        settlement_ekatte="68134",
         city="Sofia",
         property_type="apartment",
         status="active",
@@ -155,7 +157,7 @@ def property_list_item(**overrides) -> dict:
                 "room_type": "bedroom",
                 "count": 2,
                 "beds": [{"bed_type": "double", "count": 2}],
-            },  # noqa: E501
+            },
             {"room_type": "bathroom", "count": 1},
         ],
         rating="4.50",
@@ -171,6 +173,7 @@ def property_response(**overrides) -> dict:
         owner_id=str(OWNER_ID),
         property_type="apartment",
         status="active",
+        registration_number="АПТ-2024-00123",
         city="Sofia",
         latitude=None,
         longitude=None,
@@ -185,7 +188,7 @@ def property_response(**overrides) -> dict:
                 "room_type": "bedroom",
                 "count": 2,
                 "beds": [{"bed_type": "double", "count": 2}],
-            },  # noqa: E501
+            },
             {"room_type": "bathroom", "count": 1},
         ],
         has_parking=False,
@@ -195,12 +198,18 @@ def property_response(**overrides) -> dict:
         min_nights=1,
         max_nights=30,
         cancellation_policy="moderate",
+        enable_gap_filler=False,
+        gap_tax_pct="0.00",
+        gap_last_minute_window=7,
+        gap_adjacent_only=True,
         rating="4.50",
         total_reviews=10,
         updated_at=NOW.isoformat(),
         translations=[translation_response("bg")],
         images=[],
         unavailabilities=[],
+        weekday_prices=[],
+        date_price_overrides=[],
     )
     return {**base, **overrides}
 
@@ -235,6 +244,9 @@ def unavail_response(**overrides) -> dict:
 def property_create_payload(**overrides) -> dict:
     base = dict(
         city="Sofia",
+        region_code="SFO",
+        settlement_ekatte="68134",
+        registration_number="АПТ-2024-00123",
         price_per_night="50.00",
         property_type="apartment",
         max_guests=4,
@@ -244,7 +256,7 @@ def property_create_payload(**overrides) -> dict:
                 "room_type": "bedroom",
                 "count": 2,
                 "beds": [{"bed_type": "double", "count": 2}],
-            },  # noqa: E501
+            },
             {"room_type": "bathroom", "count": 1},
         ],
         translations=[translation_dict("bg")],

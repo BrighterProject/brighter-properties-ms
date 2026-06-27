@@ -21,7 +21,7 @@ DB_URL = __import__("os").environ.get(
     "DB_URL", "asyncpg://brighter:brighter@localhost:5432/brighter"
 )
 
-MODELS = ["app.models", "aerich.models"]
+MODELS = ["app.models"]
 
 # Fixed seed owner UUID — a placeholder owner for fixture properties.
 SEED_OWNER_ID = uuid.UUID("b42ebeec-727b-47a1-aec9-93e214ecf837")

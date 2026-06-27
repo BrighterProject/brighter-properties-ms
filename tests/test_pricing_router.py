@@ -309,7 +309,7 @@ def test_resolve_returns_breakdown(owner_client):
         ),
         MagicMock(
             date=date(2026, 6, 9), price=Decimal("75.00"), source="weekday", label=None
-        ),  # noqa: E501
+        ),
     ]
 
     with (

@@ -8,11 +8,14 @@ import httpx
 from fastapi import HTTPException, status
 from loguru import logger
 from ms_core import CRUD
+from tortoise import Tortoise
 from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.expressions import Q
+from tortoise.query_utils import Prefetch
 
 from app import settings
 from app.deps import CurrentUser
+from app.regions import resolve_city_name
 from app.scopes import PropertyScope
 
 from .models import (
@@ -48,6 +51,12 @@ from .schemas import (
 )
 
 FALLBACK_NAME = "Untitled"
+
+_PG_FTS_CONFIG: dict[str, str] = {"en": "english", "ru": "russian", "bg": "bulgarian"}
+
+
+def _fts_config(locale: str) -> str:
+    return _PG_FTS_CONFIG.get(locale, "simple")
 
 
 @lru_cache(maxsize=1)
@@ -214,11 +223,11 @@ class PropertyTranslationCRUD(CRUD[PropertyTranslation, TranslationResponse]):  
                 property_id=property_id,
                 **payload.model_dump(),
             )
-        except IntegrityError:
+        except IntegrityError as err:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Translation for locale '{payload.locale}' already exists",
-            ) from None
+            ) from err
         return TranslationResponse.model_validate(inst, from_attributes=True)
 
     async def update(
@@ -328,6 +337,9 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
     async def admin_delete_property(self, property_id: UUID) -> bool:
         return await self.delete_by(id=property_id)
 
+    async def count_by_owner(self, owner_id: UUID) -> int:
+        return await Property.filter(owner_id=owner_id).count()
+
     async def get_property(self, property_id: UUID) -> PropertyResponse | None:
         inst = await Property.get_or_none(id=property_id).prefetch_related(*PREFETCH)
 
@@ -365,7 +377,11 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                     id=v.id,
                     name=tr.name if tr else FALLBACK_NAME,
                     description=tr.description if tr else "",
-                    city=v.city,
+                    region_code=v.region_code,
+                    settlement_ekatte=v.settlement_ekatte,
+                    city=resolve_city_name(v.settlement_ekatte, locale) or v.city,
+                    latitude=v.latitude,
+                    longitude=v.longitude,
                     property_type=v.property_type,
                     status=PropertyStatus(v.status),
                     price_per_night=v.price_per_night,
@@ -376,6 +392,7 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                     rating=v.rating,
                     total_reviews=v.total_reviews,
                     thumbnail=thumbnail,
+                    cancellation_policy=v.cancellation_policy,
                 )
             )
         return results
@@ -384,11 +401,45 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         self, filters: PropertyFilters, locale: str = settings.DEFAULT_LOCALE
     ) -> list[PropertyListItem]:
         qs = Property.all()
+        rank_map: dict[str, float] = {}
 
         if filters.status is not None:
             qs = qs.filter(status=filters.status)
+        if filters.region_code is not None:
+            qs = qs.filter(region_code=filters.region_code)
+        if filters.settlement_ekatte is not None:
+            qs = qs.filter(settlement_ekatte=filters.settlement_ekatte)
         if filters.city is not None:
             qs = qs.filter(city__icontains=filters.city)
+        if filters.q is not None:
+            term = filters.q.strip()
+            if term:
+                if settings.db_url.startswith("sqlite"):
+                    qs = qs.filter(
+                        Q(translations__name__icontains=term)
+                        | Q(translations__description__icontains=term)
+                        | Q(translations__address__icontains=term)
+                    ).distinct()
+                else:
+                    pg_cfg = _fts_config(locale)
+                    conn = Tortoise.get_connection("default")
+                    rows = await conn.execute_query_dict(
+                        """
+                        SELECT property_id::text AS pid,
+                               MAX(TS_RANK(search_vector,
+                                   WEBSEARCH_TO_TSQUERY($1::regconfig, $2))) AS rank
+                        FROM property_translations
+                        WHERE search_vector @@ WEBSEARCH_TO_TSQUERY($1::regconfig, $2)
+                          AND locale = $3
+                        GROUP BY property_id
+                        ORDER BY rank DESC
+                        """,
+                        [pg_cfg, term, locale],
+                    )
+                    if not rows:
+                        return []
+                    rank_map = {r["pid"]: float(r["rank"]) for r in rows}
+                    qs = qs.filter(id__in=list(rank_map.keys()))
         if filters.property_type is not None:
             qs = qs.filter(property_type__in=filters.property_type)
         if filters.has_parking is not None:
@@ -431,7 +482,15 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         offset = (filters.page - 1) * filters.page_size
         qs = qs.offset(offset).limit(filters.page_size)
 
-        properties = await qs.prefetch_related("images", "translations")
+        properties = await qs.prefetch_related(
+            "images",
+            Prefetch(
+                "translations",
+                queryset=PropertyTranslation.all().only(
+                    "id", "property_id", "locale", "name", "description", "address"
+                ),
+            ),
+        )
 
         results: list[PropertyListItem] = []
         for v in properties:
@@ -445,7 +504,11 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                     id=v.id,
                     name=tr.name if tr else FALLBACK_NAME,
                     description=tr.description if tr else "",
-                    city=v.city,
+                    region_code=v.region_code,
+                    settlement_ekatte=v.settlement_ekatte,
+                    city=resolve_city_name(v.settlement_ekatte, locale) or v.city,
+                    latitude=v.latitude,
+                    longitude=v.longitude,
                     property_type=v.property_type,
                     status=PropertyStatus(v.status),
                     price_per_night=v.price_per_night,
@@ -458,6 +521,8 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                     thumbnail=thumbnail,
                 )
             )
+        if rank_map:
+            results.sort(key=lambda p: rank_map.get(str(p.id), 0.0), reverse=True)
         return results
 
 
