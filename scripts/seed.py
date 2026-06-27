@@ -29,7 +29,10 @@ SEED_OWNER_ID = uuid.UUID("b42ebeec-727b-47a1-aec9-93e214ecf837")
 FIXTURES = [
     {
         "property_type": "apartment",
+        "registration_number": "АПТ-2024-00123",
         "city": "Sofia",
+        "region_code": "SOF",
+        "settlement_ekatte": "68134",
         "latitude": Decimal("42.697708"),
         "longitude": Decimal("23.321868"),
         "price_per_night": Decimal("85.00"),
@@ -95,7 +98,10 @@ FIXTURES = [
     },
     {
         "property_type": "villa",
+        "registration_number": "АПТ-2024-00123",
         "city": "Bansko",
+        "region_code": "BLG",
+        "settlement_ekatte": "02676",
         "latitude": Decimal("41.837303"),
         "longitude": Decimal("23.487750"),
         "price_per_night": Decimal("220.00"),
@@ -169,7 +175,10 @@ FIXTURES = [
     },
     {
         "property_type": "hotel",
+        "registration_number": "АПТ-2024-00123",
         "city": "Plovdiv",
+        "region_code": "PDV",
+        "settlement_ekatte": "56784",
         "latitude": Decimal("42.150350"),
         "longitude": Decimal("24.750450"),
         "price_per_night": Decimal("65.00"),
@@ -231,7 +240,10 @@ FIXTURES = [
     },
     {
         "property_type": "apartment",
+        "registration_number": "АПТ-2024-00123",
         "city": "Varna",
+        "region_code": "VAR",
+        "settlement_ekatte": "10135",
         "latitude": Decimal("43.214103"),
         "longitude": Decimal("27.914733"),
         "price_per_night": Decimal("110.00"),
@@ -305,7 +317,10 @@ FIXTURES = [
     },
     {
         "property_type": "house",
+        "registration_number": "АПТ-2024-00123",
         "city": "Plovdiv",
+        "region_code": "PDV",
+        "settlement_ekatte": "56784",
         "latitude": Decimal("42.148150"),
         "longitude": Decimal("24.744600"),
         "price_per_night": Decimal("130.00"),
@@ -374,7 +389,10 @@ FIXTURES = [
     },
     {
         "property_type": "apartment",
+        "registration_number": "АПТ-2024-00123",
         "city": "Sofia",
+        "region_code": "SOF",
+        "settlement_ekatte": "68134",
         "latitude": Decimal("42.692233"),
         "longitude": Decimal("23.330833"),
         "price_per_night": Decimal("55.00"),
@@ -446,7 +464,7 @@ async def seed(force: bool = False) -> None:
 
     if force and existing > 0:
         deleted = await Property.filter(owner_id=SEED_OWNER_ID).delete()
-        print("[seed] Deleted existing seed properties")
+        print(f"[seed] Deleted {deleted} existing seed properties")
 
     created = 0
     for fixture in FIXTURES:
