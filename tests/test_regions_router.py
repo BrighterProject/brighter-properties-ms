@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.regions import search_oblasts
+from app.regions import get_settlements, search_oblasts
 from app.routers.regions import router
 
 
@@ -60,3 +60,34 @@ def test_combined_search_respects_limit() -> None:
         .json()
     )
     assert len(items) <= 5
+
+
+def test_settlement_center_returns_coordinates() -> None:
+    # Sofia (ekatte 68134) is a high-population match — must carry coordinates.
+    resp = _client().get("/regions/settlements/68134")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ekatte"] == "68134"
+    assert set(body) == {"ekatte", "name", "lat", "lon"}
+    assert body["lat"] is not None and body["lon"] is not None
+    # Roughly within Bulgaria's bounding box.
+    assert 41.0 <= body["lat"] <= 44.5
+    assert 22.0 <= body["lon"] <= 28.5
+
+
+def test_settlement_center_unknown_ekatte_is_404() -> None:
+    resp = _client().get("/regions/settlements/00000")
+    assert resp.status_code == 404
+
+
+def test_settlement_center_does_not_shadow_search() -> None:
+    # The static /settlements/search route must win over /settlements/{ekatte}.
+    resp = _client().get("/regions/settlements/search", params={"q": "sofia"})
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
+
+
+def test_settlements_carry_coordinates() -> None:
+    settlements = get_settlements("SFO")
+    assert settlements, "expected settlements in the Sofia-grad oblast"
+    assert all("lat" in s and "lon" in s for s in settlements)

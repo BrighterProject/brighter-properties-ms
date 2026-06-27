@@ -19,6 +19,21 @@ class SettlementEntry(TypedDict):
     tvm: str
     name: str
     name_en: str
+    lat: float | None
+    lon: float | None
+
+
+@lru_cache(maxsize=1)
+def _coords() -> dict[str, dict[str, float]]:
+    """EKATTE code -> {"lat", "lon"} approximate centroid.
+
+    Generated offline by ``processing/geocode_settlements.py``. Missing file
+    degrades gracefully to no coordinates (map falls back to Sofia center).
+    """
+    path = _DATA_DIR / "ekatte_coords.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 @lru_cache(maxsize=1)
@@ -38,6 +53,7 @@ def _settlements_by_oblast() -> dict[str, list[SettlementEntry]]:
     raw: dict = json.loads(
         (_DATA_DIR / "final_merged_settlements.json").read_text(encoding="utf-8")
     )
+    coords = _coords()
     return {
         code: [
             SettlementEntry(
@@ -45,6 +61,8 @@ def _settlements_by_oblast() -> dict[str, list[SettlementEntry]]:
                 tvm=s["tvm"],
                 name=s["name"],
                 name_en=s["name_en"],
+                lat=coords.get(s["ekatte"], {}).get("lat"),
+                lon=coords.get(s["ekatte"], {}).get("lon"),
             )
             for s in entries
         ]
