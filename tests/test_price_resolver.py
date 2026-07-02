@@ -295,3 +295,93 @@ def test_total_empty():
     from app.services.price_resolver import calculate_total
 
     assert calculate_total([]) == Decimal("0.00")
+
+
+# ---------------------------------------------------------------------------
+# Batch stay totals (search results)
+# ---------------------------------------------------------------------------
+
+
+class _AwaitableList:
+    """Mimic a Tortoise QuerySet: awaiting or .order_by() yields the row list."""
+
+    def __init__(self, items: list) -> None:
+        self._items = items
+
+    def order_by(self, *_args: Any) -> "_AwaitableList":
+        return self
+
+    def __await__(self):
+        async def _coro():
+            return self._items
+
+        return _coro().__await__()
+
+
+def _stay_totals(property_ids, start, end, base_prices, weekday_rows, override_rows):
+    import asyncio
+    from unittest.mock import MagicMock, patch
+
+    from app.services.price_resolver import compute_stay_totals
+
+    with (
+        patch(
+            "app.models.PropertyWeekdayPrice.filter",
+            MagicMock(return_value=_AwaitableList(weekday_rows)),
+        ),
+        patch(
+            "app.models.PropertyDatePriceOverride.filter",
+            MagicMock(return_value=_AwaitableList(override_rows)),
+        ),
+    ):
+        return asyncio.run(
+            compute_stay_totals(property_ids, start, end, base_prices)
+        )
+
+
+def test_stay_total_uses_base_when_no_rules():
+    """Two nights at the base price with no weekday/override rules."""
+    start, end = date(2026, 6, 8), date(2026, 6, 10)  # 2 nights
+    totals = _stay_totals(
+        ["p1"], start, end, {"p1": Decimal("50.00")}, [], []
+    )
+    assert totals == {"p1": Decimal("100.00")}
+
+
+def test_stay_total_mixes_override_and_base():
+    """First night overridden, second falls back to base."""
+    start, end = date(2026, 6, 8), date(2026, 6, 10)
+    override = _DateOverride(
+        start_date=date(2026, 6, 8),
+        end_date=date(2026, 6, 8),
+        price=Decimal("120.00"),
+        label=None,
+    )
+    override.property_id = "p1"
+    totals = _stay_totals(
+        ["p1"], start, end, {"p1": Decimal("50.00")}, [], [override]
+    )
+    assert totals == {"p1": Decimal("170.00")}
+
+
+def test_stay_total_isolated_per_property():
+    """Rows are grouped by property_id; each property gets its own total."""
+    start, end = date(2026, 6, 8), date(2026, 6, 10)
+    wd = _WeekdayRule(weekday=0, price=Decimal("30.00"))  # Mon (2026-06-08)
+    wd.property_id = "p2"
+    totals = _stay_totals(
+        ["p1", "p2"],
+        start,
+        end,
+        {"p1": Decimal("50.00"), "p2": Decimal("40.00")},
+        [wd],
+        [],
+    )
+    # p1: base 50 x2 = 100. p2: Mon=30 (weekday), Tue=40 (base) = 70.
+    assert totals == {"p1": Decimal("100.00"), "p2": Decimal("70.00")}
+
+
+def test_stay_total_empty_for_zero_nights():
+    """Same-day check-in/out yields no totals."""
+    d = date(2026, 6, 8)
+    assert _stay_totals(["p1"], d, d, {"p1": Decimal("50.00")}, [], []) == {}
