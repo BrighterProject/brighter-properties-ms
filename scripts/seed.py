@@ -29,6 +29,13 @@ SEED_OWNER_ID = uuid.UUID("b42ebeec-727b-47a1-aec9-93e214ecf837")
 # Shared tourism registry number for all seeded apartments.
 SEED_APARTMENT_REGISTRATION_NUMBER = "АПТ-2024-00123"
 
+# Default payment config for seeded properties: cash on arrival, no online deposit.
+SEED_PAYMENT_CONFIG = {
+    "accepted_methods": ["cash"],
+    "deposit_pct": 100,
+    "remaining_method": None,
+}
+
 FIXTURES = [
     {
         "property_type": "apartment",
@@ -667,6 +674,7 @@ FIXTURES.extend(SEA_FIXTURES)
 for _fixture in FIXTURES:
     if _fixture["property_type"] == "apartment":
         _fixture["registration_number"] = SEED_APARTMENT_REGISTRATION_NUMBER
+    _fixture.setdefault("payment_config", dict(SEED_PAYMENT_CONFIG))
 
 
 async def seed(force: bool = False) -> None:
