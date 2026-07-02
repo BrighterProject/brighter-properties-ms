@@ -26,6 +26,9 @@ MODELS = ["app.models"]
 # Fixed seed owner UUID — a placeholder owner for fixture properties.
 SEED_OWNER_ID = uuid.UUID("b42ebeec-727b-47a1-aec9-93e214ecf837")
 
+# Shared tourism registry number for all seeded apartments.
+SEED_APARTMENT_REGISTRATION_NUMBER = "АПТ-2024-00123"
+
 FIXTURES = [
     {
         "property_type": "apartment",
@@ -660,6 +663,10 @@ def _make_sea_fixture(index: int) -> dict:
 
 SEA_FIXTURES = [_make_sea_fixture(i) for i in range(len(_SEA_TOWNS))]
 FIXTURES.extend(SEA_FIXTURES)
+
+for _fixture in FIXTURES:
+    if _fixture["property_type"] == "apartment":
+        _fixture["registration_number"] = SEED_APARTMENT_REGISTRATION_NUMBER
 
 
 async def seed(force: bool = False) -> None:
