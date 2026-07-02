@@ -9,6 +9,10 @@ notifications_ms_url = os.environ.get("NOTIFICATIONS_MS_URL", "http://localhost:
 payments_ms_url = os.environ.get("PAYMENTS_MS_URL", "http://localhost:8003")
 DEFAULT_LOCALE = "bg"
 
+# How many days in advance a property may be booked (default ~6 months).
+# Also bounds the price-gap availability horizon.
+booking_window_days = int(os.environ.get("BOOKING_WINDOW_DAYS", "180"))
+
 # Cloudflare R2
 r2_account_id = os.environ.get("R2_ACCOUNT_ID", "")
 r2_access_key_id = os.environ.get("R2_ACCESS_KEY_ID", "")

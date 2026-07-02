@@ -16,18 +16,16 @@ from __future__ import annotations
 from datetime import date, timedelta
 from uuid import NAMESPACE_URL, UUID, uuid5
 
+from app import settings
 from app.schemas import PropertyUnavailabilityResponse
 
-# Days ahead to synthesize price-gap blocks for. Bookings further out than this
-# are effectively closed until the owner extends their pricing calendar.
-PRICE_GAP_HORIZON_DAYS = 365
 PRICE_GAP_REASON = "Няма зададена цена за тази дата"
 
 
 async def price_gap_windows(
     property_id: UUID,
     *,
-    horizon_days: int = PRICE_GAP_HORIZON_DAYS,
+    horizon_days: int | None = None,
     today: date | None = None,
 ) -> list[PropertyUnavailabilityResponse]:
     """Synthesize unavailability windows for days that have no price set.
@@ -44,7 +42,8 @@ async def price_gap_windows(
     from app.models import PropertyDatePriceOverride, PropertyWeekdayPrice
 
     start = today or date.today()
-    end = start + timedelta(days=horizon_days)
+    window = horizon_days if horizon_days is not None else settings.booking_window_days
+    end = start + timedelta(days=window)
 
     priced_weekdays = {
         w.weekday for w in await PropertyWeekdayPrice.filter(property_id=property_id)

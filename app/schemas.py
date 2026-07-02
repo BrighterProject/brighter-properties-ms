@@ -16,6 +16,7 @@ from pydantic import (
     model_validator,
 )
 
+from app import settings
 from app.models import SUPPORTED_LOCALES
 from app.models import AmenityType as AmenityType
 from app.settings import DEFAULT_LOCALE
@@ -400,6 +401,12 @@ class PropertyResponse(PropertyBase):
     unavailabilities: list[PropertyUnavailabilityResponse] = Field(default_factory=list)
     weekday_prices: list[WeekdayPriceOut] = Field(default_factory=list)
     date_price_overrides: list[DatePriceOverrideOut] = Field(default_factory=list)
+
+    # Not stored on the model — injected from settings so the booking flow and
+    # frontend know how far in advance this property can be booked.
+    booking_window_days: int = Field(
+        default_factory=lambda: settings.booking_window_days
+    )
 
     model_config = ConfigDict(from_attributes=True)
 

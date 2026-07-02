@@ -77,6 +77,14 @@ class TestGetProperty:
         assert resp.status_code == 200
         assert resp.json()["id"] == str(PROPERTY_ID)
 
+    def test_response_exposes_booking_window(self, client_factory):
+        """The advance-booking window is injected from settings (default 180)."""
+        with patch("app.routers.property.property_crud") as mock_crud:
+            mock_crud.get_property = AsyncMock(return_value=property_response())
+            resp = client_factory(make_user()).get(f"/properties/{PROPERTY_ID}")
+        assert resp.status_code == 200
+        assert resp.json()["booking_window_days"] == 180
+
     def test_missing_property_returns_404(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
             mock_crud.get_property = AsyncMock(return_value=None)
