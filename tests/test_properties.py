@@ -1,4 +1,5 @@
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -255,7 +256,12 @@ class TestDeleteProperty:
 # ---------------------------------------------------------------------------
 
 
-def _build_quota_app(current_user, payments_can_add: bool):
+def _build_quota_app(
+    current_user,
+    payments_can_add: bool,
+    can_accept_card: bool = True,
+    can_accept_bank_transfer: bool = True,
+):
     """Build an app with the payments client mocked to allow or deny."""
     from app.deps import (
         can_admin_write,
@@ -273,6 +279,12 @@ def _build_quota_app(current_user, payments_can_add: bool):
 
     mock_pc = MagicMock()
     mock_pc.can_add_listing = AsyncMock(return_value=payments_can_add)
+    mock_pc.get_payment_capabilities = AsyncMock(
+        return_value={
+            "can_accept_card": can_accept_card,
+            "can_accept_bank_transfer": can_accept_bank_transfer,
+        }
+    )
 
     app = FastAPI()
     app.include_router(router)
@@ -327,3 +339,75 @@ def test_create_property_allowed_when_subscription_active():
         mock_img.create_for_property = AsyncMock()
         resp = client.post("/properties", json=payload)
     assert resp.status_code == 201
+
+
+def test_create_property_deposit_blocked_without_online_payment():
+    """A deposit (deposit_pct < 100) is rejected when the owner can accept
+    neither card nor bank transfer — there is no way to collect it online."""
+    payload = property_create_payload(
+        payment_config={"accepted_methods": ["cash"], "deposit_pct": 50}
+    )
+    app = _build_quota_app(
+        make_user(),
+        payments_can_add=True,
+        can_accept_card=False,
+        can_accept_bank_transfer=False,
+    )
+    client = TestClient(app, raise_server_exceptions=True)
+    with patch("app.routers.property.property_crud") as mock_crud:
+        mock_crud.count_by_owner = AsyncMock(return_value=0)
+        resp = client.post("/properties", json=payload)
+    assert resp.status_code == 403
+    assert "deposit" in resp.json()["detail"].lower()
+
+
+def test_create_property_full_payment_allowed_without_online_payment():
+    """A cash-only owner may still create a property with a 100% deposit
+    (full payment on arrival)."""
+    payload = property_create_payload(
+        payment_config={"accepted_methods": ["cash"], "deposit_pct": 100}
+    )
+    created = PropertyResponse(**property_response())
+    app = _build_quota_app(
+        make_user(),
+        payments_can_add=True,
+        can_accept_card=False,
+        can_accept_bank_transfer=False,
+    )
+    client = TestClient(app, raise_server_exceptions=True)
+    with (
+        patch("app.routers.property.property_crud") as mock_crud,
+        patch("app.routers.property.property_translation_crud") as mock_tr,
+        patch("app.routers.property.property_image_crud") as mock_img,
+    ):
+        mock_crud.count_by_owner = AsyncMock(return_value=0)
+        mock_crud.create_property = AsyncMock(return_value=created)
+        mock_crud.get_property = AsyncMock(return_value=created)
+        mock_tr.create_for_property = AsyncMock()
+        mock_img.create_for_property = AsyncMock()
+        resp = client.post("/properties", json=payload)
+    assert resp.status_code == 201
+
+
+def test_update_property_deposit_blocked_without_online_payment():
+    """Updating payment_config to require a deposit is rejected for a cash-only owner."""
+    app = _build_quota_app(
+        make_user(),
+        payments_can_add=True,
+        can_accept_card=False,
+        can_accept_bank_transfer=False,
+    )
+    client = TestClient(app, raise_server_exceptions=True)
+    with patch("app.routers.property.property_crud"):
+        resp = client.patch(
+            f"/properties/{uuid4()}",
+            json={
+                "payment_config": {
+                    "accepted_methods": ["cash"],
+                    "deposit_pct": 30,
+                    "remaining_method": "cash",
+                }
+            },
+        )
+    assert resp.status_code == 403
+    assert "deposit" in resp.json()["detail"].lower()
