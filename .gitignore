@@ -168,3 +168,6 @@ cython_debug/
 # GeoNames Bulgaria dump — build input for processing/geocode_settlements.py.
 # Only the generated processing/ekatte_coords.json is committed.
 processing/BG.zip
+
+# Generated OpenAPI export (produced on demand for brighter-docs)
+openapi.json
