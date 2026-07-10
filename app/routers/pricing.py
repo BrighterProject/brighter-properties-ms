@@ -24,6 +24,7 @@ from app.schemas import (
     WeekdayPriceIn,
     WeekdayPriceOut,
 )
+from app.services.base_price import sync_base_price
 from app.services.price_resolver import calculate_total, resolve_prices_for_property
 
 router = APIRouter(prefix="/properties/{property_id}/pricing", tags=["Pricing"])
@@ -61,7 +62,9 @@ async def upsert_weekday_prices(
             detail="Duplicate weekdays in request",
         )
     await assert_owns_property(property_id, current_user)
-    return await weekday_price_crud.upsert_all(property_id, rules)
+    result = await weekday_price_crud.upsert_all(property_id, rules)
+    await sync_base_price(property_id)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +101,9 @@ async def create_override(
     current_user: CurrentUser = Depends(can_schedule_or_admin),
 ):
     await assert_owns_property(property_id, current_user)
-    return await date_override_crud.create_for_property(property_id, payload)
+    result = await date_override_crud.create_for_property(property_id, payload)
+    await sync_base_price(property_id)
+    return result
 
 
 @router.patch("/overrides/{override_id}", response_model=DatePriceOverrideOut)
@@ -116,6 +121,7 @@ async def update_override(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Override not found"
         )
+    await sync_base_price(property_id)
     return item
 
 
@@ -133,6 +139,7 @@ async def delete_override(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Override not found"
         )
+    await sync_base_price(property_id)
 
 
 # ---------------------------------------------------------------------------

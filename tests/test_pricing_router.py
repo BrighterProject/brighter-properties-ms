@@ -122,6 +122,7 @@ def test_put_weekday_prices_owner(owner_client):
     payload = [{"weekday": 5, "price": "90.00"}, {"weekday": 6, "price": "90.00"}]
     with (
         patch("app.routers.pricing.assert_owns_property", new_callable=AsyncMock),
+        patch("app.routers.pricing.sync_base_price", new_callable=AsyncMock) as sync,
         patch("app.routers.pricing.weekday_price_crud") as mock,
     ):
         mock.upsert_all = AsyncMock(
@@ -136,6 +137,7 @@ def test_put_weekday_prices_owner(owner_client):
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) == 2
+    sync.assert_awaited_once_with(PROPERTY_ID)
 
 
 def test_put_weekday_prices_duplicate_weekday_rejected(owner_client):
@@ -210,6 +212,7 @@ def test_create_override_owner(owner_client):
     }
     with (
         patch("app.routers.pricing.assert_owns_property", new_callable=AsyncMock),
+        patch("app.routers.pricing.sync_base_price", new_callable=AsyncMock) as sync,
         patch("app.routers.pricing.date_override_crud") as mock,
     ):
         mock.create_for_property = AsyncMock(return_value=override_out())
@@ -218,6 +221,7 @@ def test_create_override_owner(owner_client):
         )
     assert resp.status_code == 201
     assert resp.json()["label"] == "Christmas"
+    sync.assert_awaited_once_with(PROPERTY_ID)
 
 
 def test_create_override_invalid_dates_rejected(owner_client):
@@ -241,6 +245,7 @@ def test_update_override_owner(owner_client):
     payload = {"price": "175.00"}
     with (
         patch("app.routers.pricing.assert_owns_property", new_callable=AsyncMock),
+        patch("app.routers.pricing.sync_base_price", new_callable=AsyncMock) as sync,
         patch("app.routers.pricing.date_override_crud") as mock,
     ):
         mock.update = AsyncMock(return_value=override_out(price="175.00"))
@@ -249,6 +254,7 @@ def test_update_override_owner(owner_client):
         )
     assert resp.status_code == 200
     assert resp.json()["price"] == "175.00"
+    sync.assert_awaited_once_with(PROPERTY_ID)
 
 
 def test_update_override_not_found(owner_client):
@@ -272,6 +278,7 @@ def test_update_override_not_found(owner_client):
 def test_delete_override_owner(owner_client):
     with (
         patch("app.routers.pricing.assert_owns_property", new_callable=AsyncMock),
+        patch("app.routers.pricing.sync_base_price", new_callable=AsyncMock) as sync,
         patch("app.routers.pricing.date_override_crud") as mock,
     ):
         mock.delete = AsyncMock(return_value=True)
@@ -279,6 +286,7 @@ def test_delete_override_owner(owner_client):
             f"/properties/{PROPERTY_ID}/pricing/overrides/{OVERRIDE_ID}"
         )
     assert resp.status_code == 204
+    sync.assert_awaited_once_with(PROPERTY_ID)
 
 
 def test_delete_override_not_found(owner_client):

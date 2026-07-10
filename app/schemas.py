@@ -16,6 +16,7 @@ from pydantic import (
     model_validator,
 )
 
+from app import settings
 from app.models import SUPPORTED_LOCALES
 from app.models import AmenityType as AmenityType
 from app.settings import DEFAULT_LOCALE
@@ -218,8 +219,10 @@ class PropertyBase(BaseModel):
     latitude: Decimal | None = Field(default=None, ge=-90, le=90, decimal_places=6)
     longitude: Decimal | None = Field(default=None, ge=-180, le=180, decimal_places=6)
 
-    # Price
-    price_per_night: Decimal = Field(..., ge=0, decimal_places=2)
+    # Price — derived from the pricing calendar (cheapest configured night), no
+    # longer entered by owners. Defaults to 0 until pricing is set; recomputed by
+    # app.services.base_price on every pricing-calendar change.
+    price_per_night: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
     currency: Annotated[str, Field(min_length=3, max_length=3)] = "EUR"
 
     # Accommodation
@@ -401,6 +404,12 @@ class PropertyResponse(PropertyBase):
     weekday_prices: list[WeekdayPriceOut] = Field(default_factory=list)
     date_price_overrides: list[DatePriceOverrideOut] = Field(default_factory=list)
 
+    # Not stored on the model — injected from settings so the booking flow and
+    # frontend know how far in advance this property can be booked.
+    booking_window_days: int = Field(
+        default_factory=lambda: settings.booking_window_days
+    )
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -429,6 +438,11 @@ class PropertyListItem(BaseModel):
     total_reviews: int
     thumbnail: str | None = None
     cancellation_policy: CancellationPolicy | None = None
+
+    # Populated only when the search carries a date range (available_from/to):
+    # the resolved total for the whole stay and the number of nights it covers.
+    stay_total: Decimal | None = None
+    stay_nights: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -17,6 +17,7 @@ from app import settings
 from app.deps import CurrentUser
 from app.regions import resolve_city_name
 from app.scopes import PropertyScope
+from app.services.price_resolver import compute_stay_totals
 
 from .models import (
     Property,
@@ -492,6 +493,19 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             ),
         )
 
+        # When the search carries a date range, price each property's full stay
+        # so the frontend can show a total instead of a per-night "from" price.
+        stay_nights: int | None = None
+        stay_totals: dict = {}
+        if filters.available_from is not None and filters.available_to is not None:
+            stay_nights = (filters.available_to - filters.available_from).days
+            stay_totals = await compute_stay_totals(
+                [v.id for v in properties],
+                filters.available_from,
+                filters.available_to,
+                {v.id: v.price_per_night for v in properties},
+            )
+
         results: list[PropertyListItem] = []
         for v in properties:
             thumbnail = next(
@@ -501,6 +515,8 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             tr = _resolve_translation(v.translations, locale)  # type: ignore[union-attr]
             results.append(
                 PropertyListItem(
+                    stay_total=stay_totals.get(v.id),
+                    stay_nights=stay_nights,
                     id=v.id,
                     name=tr.name if tr else FALLBACK_NAME,
                     description=tr.description if tr else "",

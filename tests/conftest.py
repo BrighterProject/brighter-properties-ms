@@ -62,9 +62,13 @@ def build_app(current_user) -> FastAPI:
     ):
         app.dependency_overrides[dep] = _user
 
-    # Default: subscription quota approved (tests that need rejection build their own app)
+    # Default: subscription quota approved and owner fully payment-capable
+    # (tests that need rejection build their own app).
     _permissive_pc = MagicMock()
     _permissive_pc.can_add_listing = AsyncMock(return_value=True)
+    _permissive_pc.get_payment_capabilities = AsyncMock(
+        return_value={"can_accept_card": True, "can_accept_bank_transfer": True}
+    )
     app.dependency_overrides[get_payments_client] = lambda: _permissive_pc
 
     return app

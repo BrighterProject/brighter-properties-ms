@@ -19,6 +19,7 @@ from app.deps import (
 )
 from app.limiter import limiter
 from app.schemas import (
+    PaymentConfig,
     PropertyCreate,
     PropertyFilters,
     PropertyListItem,
@@ -31,6 +32,54 @@ from app.scopes import PropertyScope
 from app.settings import DEFAULT_LOCALE
 
 router = APIRouter(prefix="/properties", tags=["properties"])
+
+
+async def _validate_payment_config(
+    config: PaymentConfig, payments_client: PaymentsClient
+) -> None:
+    """Validate an owner's payment config against their payment capabilities.
+
+    Enforces two rules for non-admin owners:
+      * ``accepted_methods`` may only include ``card`` / ``bank_transfer`` if the
+        owner can actually accept them.
+      * A deposit (``deposit_pct`` < 100 or a ``remaining_method``) requires an
+        online payment method (card or bank transfer). An owner who can accept
+        neither cannot collect an online prepayment, so the deposit must be 100%
+        (full payment on arrival) with no remaining-method split.
+
+    Args:
+        config: The payment configuration submitted by the owner.
+        payments_client: Client used to fetch the caller's capabilities.
+
+    Raises:
+        HTTPException: 403 if the config exceeds the owner's capabilities.
+    """
+    caps = await payments_client.get_payment_capabilities()
+    can_card = bool(caps.get("can_accept_card"))
+    can_bank = bool(caps.get("can_accept_bank_transfer"))
+
+    if "card" in config.accepted_methods and not can_card:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Card payments require an active Stripe Connect account with no outstanding requirements.",
+        )
+    if "bank_transfer" in config.accepted_methods and not can_bank:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bank transfer payments require a bank account to be configured.",
+        )
+
+    if not can_card and not can_bank and (
+        config.deposit_pct != 100 or config.remaining_method is not None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Collecting a deposit requires an online payment method "
+                "(card or bank transfer). Configure one, or set the deposit to "
+                "100% (full payment on arrival)."
+            ),
+        )
 
 
 @router.get("/items/")
@@ -65,6 +114,7 @@ async def create_property(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Active subscription required to add listings. Upgrade your plan.",
             )
+        await _validate_payment_config(payload.payment_config, payments_client)
     created = await property_crud.create_property(payload, owner_id=current_user.id)
 
     for tr in payload.translations:
@@ -117,18 +167,7 @@ async def update_property(
     )
 
     if payload.payment_config is not None and not is_admin:
-        caps = await payments_client.get_payment_capabilities()
-        methods = payload.payment_config.accepted_methods
-        if "card" in methods and not caps.get("can_accept_card"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Card payments require an active Stripe Connect account with no outstanding requirements.",
-            )
-        if "bank_transfer" in methods and not caps.get("can_accept_bank_transfer"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Bank transfer payments require a bank account to be configured.",
-            )
+        await _validate_payment_config(payload.payment_config, payments_client)
 
     updated = await property_crud.update_property(
         property_id, payload, owner_id=None if is_admin else current_user.id

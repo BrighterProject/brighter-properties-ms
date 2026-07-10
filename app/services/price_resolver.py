@@ -115,3 +115,62 @@ async def resolve_prices_for_property(
 def calculate_total(nights: list[Any]) -> Decimal:
     """Sum night prices. Returns 0.00 for empty input."""
     return sum((n.price for n in nights), Decimal("0.00"))
+
+
+async def compute_stay_totals(
+    property_ids: list[Any],
+    start_date: date,
+    end_date: date,
+    base_prices: dict[Any, Decimal],
+) -> dict[Any, Decimal]:
+    """Compute the stay total for each property over ``[start_date, end_date)``.
+
+    Batch-loads weekday rules and date overrides for all given properties in two
+    queries (no N+1) and resolves each stay independently.
+
+    Args:
+        property_ids: Properties to price.
+        start_date: Check-in date (inclusive).
+        end_date: Checkout date (excluded from the nightly sum).
+        base_prices: Per-property fallback price for nights with no rule.
+
+    Returns:
+        A ``{property_id: total}`` mapping. Properties with no priced nights
+        still get a total computed from their base price.
+    """
+    from collections import defaultdict
+
+    from app.models import PropertyDatePriceOverride, PropertyWeekdayPrice
+
+    if not property_ids or (end_date - start_date).days <= 0:
+        return {}
+
+    # Tortoise exposes the FK column as ``.property_id`` at runtime; typed as Any
+    # so the grouping below type-checks.
+    weekday_rows: list[Any] = await PropertyWeekdayPrice.filter(
+        property_id__in=property_ids
+    )
+    override_rows: list[Any] = await PropertyDatePriceOverride.filter(
+        property_id__in=property_ids,
+        start_date__lte=end_date,
+        end_date__gte=start_date,
+    ).order_by("created_at")
+
+    weekdays_by_prop: dict[Any, list] = defaultdict(list)
+    for w in weekday_rows:
+        weekdays_by_prop[w.property_id].append(w)
+    overrides_by_prop: dict[Any, list] = defaultdict(list)
+    for o in override_rows:
+        overrides_by_prop[o.property_id].append(o)
+
+    totals: dict[Any, Decimal] = {}
+    for pid in property_ids:
+        nights = resolve_prices_sync(
+            base_price=base_prices.get(pid, Decimal("0")),
+            start_date=start_date,
+            end_date=end_date,
+            weekday_rules=weekdays_by_prop.get(pid, []),
+            date_overrides=overrides_by_prop.get(pid, []),
+        )
+        totals[pid] = calculate_total(nights)
+    return totals
