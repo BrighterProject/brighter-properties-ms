@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 from functools import lru_cache
 from uuid import UUID
 
@@ -509,7 +508,6 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                 [v.id for v in properties],
                 filters.available_from,
                 filters.available_to,
-                {v.id: v.price_from or Decimal("0") for v in properties},
             )
 
         results: list[PropertyListItem] = []

@@ -504,9 +504,9 @@ class DatePriceOverrideOut(BaseModel):
 
 
 class PriceSource(StrEnum):
-    BASE = "base"
     WEEKDAY = "weekday"
     DATE_OVERRIDE = "date_override"
+    UNPRICED = "unpriced"
 
 
 class ResolvedNightPrice(BaseModel):
@@ -520,6 +520,19 @@ class PriceResolutionResponse(BaseModel):
     currency: str
     nights: list[ResolvedNightPrice]
     total: Decimal
+
+
+class UnpricedWindow(BaseModel):
+    """A contiguous run of days with no price set (``[start_date, end_date)``)."""
+
+    start_date: date
+    end_date: date  # exclusive
+
+
+class PricingCoverageResponse(BaseModel):
+    """Days a property cannot be booked because no price is configured."""
+
+    unpriced_windows: list[UnpricedWindow]
 
 
 class PropertyFilters(BaseModel):

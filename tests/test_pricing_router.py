@@ -308,12 +308,14 @@ def test_delete_override_not_found(owner_client):
 
 def test_resolve_returns_breakdown(owner_client):
     property_mock = MagicMock()
-    property_mock.price_from = Decimal("50.00")
     property_mock.currency = "EUR"
 
     nights = [
         MagicMock(
-            date=date(2026, 6, 8), price=Decimal("50.00"), source="base", label=None
+            date=date(2026, 6, 8),
+            price=Decimal("50.00"),
+            source="date_override",
+            label="Sale",
         ),
         MagicMock(
             date=date(2026, 6, 9), price=Decimal("75.00"), source="weekday", label=None
@@ -339,8 +341,70 @@ def test_resolve_returns_breakdown(owner_client):
     assert body["currency"] == "EUR"
     assert body["total"] == "125.00"
     assert len(body["nights"]) == 2
-    assert body["nights"][0]["source"] == "base"
+    assert body["nights"][0]["source"] == "date_override"
     assert body["nights"][1]["source"] == "weekday"
+
+
+def test_resolve_returns_409_for_unpriced_nights(owner_client):
+    property_mock = MagicMock()
+    property_mock.currency = "EUR"
+
+    nights = [
+        MagicMock(
+            date=date(2026, 6, 8), price=Decimal("75.00"), source="weekday", label=None
+        ),
+        MagicMock(
+            date=date(2026, 6, 9),
+            price=Decimal("0.00"),
+            source="unpriced",
+            label=None,
+        ),
+    ]
+
+    with (
+        patch("app.routers.pricing.Property") as MockProperty,
+        patch(
+            "app.routers.pricing.resolve_prices_for_property",
+            new_callable=AsyncMock,
+            return_value=nights,
+        ),
+    ):
+        MockProperty.get_or_none = AsyncMock(return_value=property_mock)
+        resp = owner_client.get(
+            f"/properties/{PROPERTY_ID}/pricing/resolve",
+            params={"start_date": "2026-06-08", "end_date": "2026-06-10"},
+        )
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["unpriced_dates"] == ["2026-06-09"]
+
+
+def test_pricing_coverage_returns_unpriced_windows(owner_client):
+    from app.schemas import UnpricedWindow
+
+    windows = [UnpricedWindow(start_date=date(2026, 6, 8), end_date=date(2026, 6, 10))]
+    with patch(
+        "app.routers.pricing.unpriced_windows",
+        new_callable=AsyncMock,
+        return_value=windows,
+    ):
+        resp = owner_client.get(
+            f"/properties/{PROPERTY_ID}/pricing/coverage",
+            params={"start": "2026-06-08", "end": "2026-06-30"},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["unpriced_windows"] == [
+        {"start_date": "2026-06-08", "end_date": "2026-06-10"}
+    ]
+
+
+def test_pricing_coverage_invalid_range(owner_client):
+    resp = owner_client.get(
+        f"/properties/{PROPERTY_ID}/pricing/coverage",
+        params={"start": "2026-06-30", "end": "2026-06-08"},
+    )
+    assert resp.status_code == 422
 
 
 def test_resolve_property_not_found(owner_client):
