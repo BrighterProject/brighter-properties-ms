@@ -25,7 +25,6 @@ class TestPropertyCreateSchema:
         data = PropertyCreate(
             **VALID_BASE,
             city="Sofia",
-            price_per_night=Decimal("50.00"),
             translations=[TranslationCreate(**translation_dict("bg"))],
         )
         assert data.currency == "EUR"
@@ -36,25 +35,15 @@ class TestPropertyCreateSchema:
         data = PropertyCreate(
             **VALID_BASE,
             city="City",
-            price_per_night=Decimal("10"),
             currency="eur",
             translations=[TranslationCreate(**translation_dict("bg"))],
         )
         assert data.currency == "EUR"
 
-    def test_negative_price_raises(self):
-        with pytest.raises(ValidationError):
-            PropertyCreate(
-                city="City",
-                price_per_night=Decimal("-5"),
-                translations=[TranslationCreate(**translation_dict("bg"))],
-            )
-
     def test_max_guests_zero_raises(self):
         with pytest.raises(ValidationError):
             PropertyCreate(
                 city="City",
-                price_per_night=Decimal("10"),
                 max_guests=0,
                 translations=[TranslationCreate(**translation_dict("bg"))],
             )
@@ -64,7 +53,6 @@ class TestPropertyCreateSchema:
             PropertyCreate(
                 **VALID_BASE,
                 city="City",
-                price_per_night=Decimal("10"),
                 min_nights=10,
                 max_nights=3,
                 translations=[TranslationCreate(**translation_dict("bg"))],
@@ -74,7 +62,6 @@ class TestPropertyCreateSchema:
         with pytest.raises(ValidationError):
             PropertyCreate(
                 city="City",
-                price_per_night=Decimal("10"),
                 translations=[],
             )
 
@@ -82,7 +69,6 @@ class TestPropertyCreateSchema:
         with pytest.raises(ValidationError, match="Duplicate locales"):
             PropertyCreate(
                 city="City",
-                price_per_night=Decimal("10"),
                 translations=[
                     TranslationCreate(**translation_dict("bg")),
                     TranslationCreate(**translation_dict("bg")),
@@ -93,7 +79,6 @@ class TestPropertyCreateSchema:
         with pytest.raises(ValidationError, match="Bulgarian"):
             PropertyCreate(
                 city="City",
-                price_per_night=Decimal("10"),
                 translations=[TranslationCreate(**translation_dict("en"))],
             )
 
@@ -101,7 +86,6 @@ class TestPropertyCreateSchema:
         data = PropertyCreate(
             **VALID_BASE,
             city="Sofia",
-            price_per_night=Decimal("50.00"),
             translations=[
                 TranslationCreate(**translation_dict("bg")),
                 TranslationCreate(**translation_dict("en")),

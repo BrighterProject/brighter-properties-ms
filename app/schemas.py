@@ -219,10 +219,9 @@ class PropertyBase(BaseModel):
     latitude: Decimal | None = Field(default=None, ge=-90, le=90, decimal_places=6)
     longitude: Decimal | None = Field(default=None, ge=-180, le=180, decimal_places=6)
 
-    # Price — derived from the pricing calendar (cheapest configured night), no
-    # longer entered by owners. Defaults to 0 until pricing is set; recomputed by
-    # app.services.base_price on every pricing-calendar change.
-    price_per_night: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    # Price is never owner input — it is derived from the pricing calendar and
+    # surfaced on read schemas as ``price_from`` (see PropertyResponse /
+    # PropertyListItem). Only the currency is carried here.
     currency: Annotated[str, Field(min_length=3, max_length=3)] = "EUR"
 
     # Accommodation
@@ -318,7 +317,6 @@ class PropertyUpdate(BaseModel):
     latitude: Decimal | None = Field(default=None, ge=-90, le=90)
     longitude: Decimal | None = Field(default=None, ge=-180, le=180)
 
-    price_per_night: Decimal | None = Field(default=None, ge=0)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
 
     max_guests: int | None = Field(default=None, ge=1)
@@ -392,6 +390,10 @@ class PropertyResponse(PropertyBase):
     status: PropertyStatus
     registration_number: str | None = None
 
+    # Derived pricing (system-owned; see app.services.pricing_cache).
+    price_from: Decimal | None = None
+    has_valid_pricing: bool = False
+
     rating: Decimal
     total_reviews: int
 
@@ -429,7 +431,7 @@ class PropertyListItem(BaseModel):
     longitude: Decimal | None = None
     property_type: PropertyType
     status: PropertyStatus
-    price_per_night: Decimal
+    price_from: Decimal | None = None  # derived cheapest nightly rate ("from X")
     currency: str
     max_guests: int
     bedrooms: int

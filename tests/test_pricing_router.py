@@ -122,7 +122,7 @@ def test_put_weekday_prices_owner(owner_client):
     payload = [{"weekday": 5, "price": "90.00"}, {"weekday": 6, "price": "90.00"}]
     with (
         patch("app.routers.pricing.assert_owns_property", new_callable=AsyncMock),
-        patch("app.routers.pricing.sync_base_price", new_callable=AsyncMock) as sync,
+        patch("app.routers.pricing.sync_pricing_cache", new_callable=AsyncMock) as sync,
         patch("app.routers.pricing.weekday_price_crud") as mock,
     ):
         mock.upsert_all = AsyncMock(
@@ -212,7 +212,7 @@ def test_create_override_owner(owner_client):
     }
     with (
         patch("app.routers.pricing.assert_owns_property", new_callable=AsyncMock),
-        patch("app.routers.pricing.sync_base_price", new_callable=AsyncMock) as sync,
+        patch("app.routers.pricing.sync_pricing_cache", new_callable=AsyncMock) as sync,
         patch("app.routers.pricing.date_override_crud") as mock,
     ):
         mock.create_for_property = AsyncMock(return_value=override_out())
@@ -245,7 +245,7 @@ def test_update_override_owner(owner_client):
     payload = {"price": "175.00"}
     with (
         patch("app.routers.pricing.assert_owns_property", new_callable=AsyncMock),
-        patch("app.routers.pricing.sync_base_price", new_callable=AsyncMock) as sync,
+        patch("app.routers.pricing.sync_pricing_cache", new_callable=AsyncMock) as sync,
         patch("app.routers.pricing.date_override_crud") as mock,
     ):
         mock.update = AsyncMock(return_value=override_out(price="175.00"))
@@ -278,7 +278,7 @@ def test_update_override_not_found(owner_client):
 def test_delete_override_owner(owner_client):
     with (
         patch("app.routers.pricing.assert_owns_property", new_callable=AsyncMock),
-        patch("app.routers.pricing.sync_base_price", new_callable=AsyncMock) as sync,
+        patch("app.routers.pricing.sync_pricing_cache", new_callable=AsyncMock) as sync,
         patch("app.routers.pricing.date_override_crud") as mock,
     ):
         mock.delete = AsyncMock(return_value=True)
@@ -308,7 +308,7 @@ def test_delete_override_not_found(owner_client):
 
 def test_resolve_returns_breakdown(owner_client):
     property_mock = MagicMock()
-    property_mock.price_per_night = Decimal("50.00")
+    property_mock.price_from = Decimal("50.00")
     property_mock.currency = "EUR"
 
     nights = [

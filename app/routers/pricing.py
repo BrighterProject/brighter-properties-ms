@@ -7,6 +7,7 @@ Mutations require properties:schedule scope (owner) or admin:properties:write (a
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -24,8 +25,8 @@ from app.schemas import (
     WeekdayPriceIn,
     WeekdayPriceOut,
 )
-from app.services.base_price import sync_base_price
 from app.services.price_resolver import calculate_total, resolve_prices_for_property
+from app.services.pricing_cache import sync_pricing_cache
 
 router = APIRouter(prefix="/properties/{property_id}/pricing", tags=["Pricing"])
 
@@ -63,7 +64,7 @@ async def upsert_weekday_prices(
         )
     await assert_owns_property(property_id, current_user)
     result = await weekday_price_crud.upsert_all(property_id, rules)
-    await sync_base_price(property_id)
+    await sync_pricing_cache(property_id)
     return result
 
 
@@ -102,7 +103,7 @@ async def create_override(
 ):
     await assert_owns_property(property_id, current_user)
     result = await date_override_crud.create_for_property(property_id, payload)
-    await sync_base_price(property_id)
+    await sync_pricing_cache(property_id)
     return result
 
 
@@ -121,7 +122,7 @@ async def update_override(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Override not found"
         )
-    await sync_base_price(property_id)
+    await sync_pricing_cache(property_id)
     return item
 
 
@@ -139,7 +140,7 @@ async def delete_override(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Override not found"
         )
-    await sync_base_price(property_id)
+    await sync_pricing_cache(property_id)
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +178,7 @@ async def resolve_pricing(
 
     nights = await resolve_prices_for_property(
         property_id=property_id,
-        base_price=prop.price_per_night,
+        base_price=prop.price_from or Decimal("0"),
         start_date=start_date,
         end_date=end_date,
     )
