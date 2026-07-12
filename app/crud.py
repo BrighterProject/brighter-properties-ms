@@ -385,7 +385,7 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                     longitude=v.longitude,
                     property_type=v.property_type,
                     status=PropertyStatus(v.status),
-                    price_per_night=v.price_per_night,
+                    price_from=v.price_from,
                     currency=v.currency,
                     max_guests=v.max_guests,
                     bedrooms=v.bedrooms,
@@ -451,9 +451,9 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             for amenity in filters.amenities:
                 qs = qs.filter(amenities__contains=f'"{amenity}"')
         if filters.min_price is not None:
-            qs = qs.filter(price_per_night__gte=filters.min_price)
+            qs = qs.filter(price_from__gte=filters.min_price)
         if filters.max_price is not None:
-            qs = qs.filter(price_per_night__lte=filters.max_price)
+            qs = qs.filter(price_from__lte=filters.max_price)
         if filters.min_rating is not None:
             qs = qs.filter(rating__gte=filters.min_rating)
         if filters.min_guests is not None:
@@ -461,7 +461,12 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         if filters.bedrooms is not None:
             qs = qs.filter(bedrooms__gte=filters.bedrooms)
         if filters.owner_id is not None:
+            # Owner-scoped listing (admin panel) shows the owner's own drafts,
+            # including ones without pricing yet.
             qs = qs.filter(owner_id=filters.owner_id)
+        else:
+            # Public browse: hide properties with no bookable (priced) days.
+            qs = qs.filter(has_valid_pricing=True)
 
         if filters.available_from is not None and filters.available_to is not None:
             af = filters.available_from
@@ -503,7 +508,6 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                 [v.id for v in properties],
                 filters.available_from,
                 filters.available_to,
-                {v.id: v.price_per_night for v in properties},
             )
 
         results: list[PropertyListItem] = []
@@ -527,7 +531,7 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                     longitude=v.longitude,
                     property_type=v.property_type,
                     status=PropertyStatus(v.status),
-                    price_per_night=v.price_per_night,
+                    price_from=v.price_from,
                     currency=v.currency,
                     max_guests=v.max_guests,
                     bedrooms=v.bedrooms,

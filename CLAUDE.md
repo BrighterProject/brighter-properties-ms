@@ -67,14 +67,29 @@ tests/
   test_*.py            # One file per router + edge cases + schemas + scopes
 ```
 
-## Pseudo-dynamic pricing
+## Pricing — calendar only (no base price)
+
+Prices are set **exclusively** via the pricing calendar; there is no owner-entered
+base price. `Property.price_per_night` was removed (migration `0005`) in favour of
+two **system-owned** projections, never owner input, maintained by
+`app/services/pricing_cache.py`:
+
+- `price_from` — cheapest configured nightly rate (nullable; the "from X" price).
+- `has_valid_pricing` — `>=1` priced day within the `BOOKING_WINDOW_DAYS` horizon;
+  gates public listing visibility (public `GET /properties` hides properties where
+  it is false; owner-scoped `?owner_id=` listings still show unpriced drafts).
+
+`sync_pricing_cache(property_id)` refreshes both on every weekday/override write.
+`scripts/recompute_pricing_cache.py` (nightly cron) corrects horizon drift for
+override-only properties whose overrides age out of the window.
 
 Models: `PropertyWeekdayPrice` (0=Mon…6=Sun), `PropertyDatePriceOverride` (date range + optional label).
 Router: `app/routers/pricing.py` — prefix `/properties/{property_id}/pricing`.
 Auth: public GETs; mutations require `properties:schedule` scope (owner) or `admin:properties:write` (admin).
-Priority: date override › weekday › base price.
-Resolution: `GET /pricing/resolve?start_date=&end_date=` returns per-night breakdown with source field (`base` | `weekday` | `date_override`).
-Tested in `tests/test_pricing_router.py` and `tests/test_price_resolver.py`.
+Priority: date override › weekday. A night with neither is **unpriced** (source `unpriced`, price 0) — unbookable, no base-price fallback.
+Resolution: `GET /pricing/resolve?start_date=&end_date=` returns the per-night breakdown (source `weekday` | `date_override`), or **409** with `unpriced_dates` when any night is unpriced.
+Coverage: `GET /pricing/coverage?start=&end=` returns `unpriced_windows` (`[start_date, end_date)`, end-exclusive) — used by the frontend date picker to disable unbookable days (`app/services/coverage.py`). `GET /properties/{id}/unavailabilities` returns **real owner blocks only** (the old `include_price_gaps` synthesis is gone).
+Tested in `tests/test_pricing_router.py`, `tests/test_price_resolver.py`, `tests/test_coverage.py`, `tests/test_pricing_cache.py`.
 
 ## ms-core
 

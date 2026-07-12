@@ -698,7 +698,13 @@ for _fixture in FIXTURES:
 async def seed(force: bool = False) -> None:
     await Tortoise.init(db_url=DB_URL, modules={"models": MODELS})
 
-    from app.models import Property, PropertyImage, PropertyTranslation
+    from app.models import (
+        Property,
+        PropertyImage,
+        PropertyTranslation,
+        PropertyWeekdayPrice,
+    )
+    from app.services.pricing_cache import sync_pricing_cache
 
     existing = await Property.filter(status="active").count()
     if existing > 0 and not force:
@@ -716,6 +722,9 @@ async def seed(force: bool = False) -> None:
     for fixture in FIXTURES:
         translations = fixture.pop("translations")
         images = fixture.pop("images")
+        # Price is no longer a stored field — seed a flat weekday rate and let
+        # the pricing cache derive price_from / has_valid_pricing.
+        seed_price = fixture.pop("price_per_night")
 
         prop = await Property.create(
             id=uuid.uuid4(),
@@ -730,12 +739,19 @@ async def seed(force: bool = False) -> None:
         for img in images:
             await PropertyImage.create(id=uuid.uuid4(), property=prop, **img)
 
+        for weekday in range(7):
+            await PropertyWeekdayPrice.create(
+                id=uuid.uuid4(), property=prop, weekday=weekday, price=seed_price
+            )
+        await sync_pricing_cache(prop.id)
+
         print(f"[seed] Created: {prop.city} — {translations[0]['name']}")
         created += 1
 
         # Restore so the script can be re-run (list references are consumed otherwise)
         fixture["translations"] = translations
         fixture["images"] = images
+        fixture["price_per_night"] = seed_price
 
     print(f"[seed] Done — {created} properties inserted.")
     await Tortoise.close_connections()

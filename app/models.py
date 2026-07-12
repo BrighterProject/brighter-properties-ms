@@ -83,8 +83,13 @@ class Property(Model):
     latitude = fields.DecimalField(max_digits=9, decimal_places=6, null=True)
     longitude = fields.DecimalField(max_digits=9, decimal_places=6, null=True)
 
-    # Price
-    price_per_night = fields.DecimalField(max_digits=8, decimal_places=2)
+    # Price — system-owned projection of the pricing calendar, never owner input.
+    # Maintained by app.services.pricing_cache on every pricing-calendar change.
+    # price_from: cheapest configured nightly rate (None until pricing is set).
+    # has_valid_pricing: >=1 priced day within the booking horizon; gates public
+    # listing visibility.
+    price_from = fields.DecimalField(max_digits=8, decimal_places=2, null=True)
+    has_valid_pricing = fields.BooleanField(default=False)
     currency = fields.CharField(max_length=3, default="EUR")
 
     # Accommodation details

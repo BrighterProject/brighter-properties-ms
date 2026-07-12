@@ -1,6 +1,9 @@
 """Pure price resolution logic for pseudo-dynamic pricing.
 
-Priority: date_override > weekday_rule > base_price.
+Priority: date_override > weekday_rule. A night covered by neither is "unpriced"
+(source ``"unpriced"``, price 0) — there is no base-price fallback. Callers that
+require a bookable stay must reject any result containing an unpriced night.
+
 Overlapping date overrides: last element in the list wins (caller must pass them
 ordered by created_at ascending so the last one is the most recently created).
 """
@@ -27,13 +30,12 @@ class _HasDateRange(Protocol):
 class ResolvedNight(NamedTuple):
     date: date
     price: Decimal
-    source: str  # "base" | "weekday" | "date_override"
+    source: str  # "weekday" | "date_override" | "unpriced"
     label: str | None
 
 
 def resolve_prices_sync(
     *,
-    base_price: Decimal,
     start_date: date,
     end_date: date,
     weekday_rules: list[Any],
@@ -44,6 +46,9 @@ def resolve_prices_sync(
     ``end_date`` is the checkout day and is excluded from the result.
     ``date_overrides`` must be ordered by ``created_at`` ascending so that
     the last matching entry is the most recently created (wins on overlap).
+
+    Nights with neither an override nor a weekday rule are returned with
+    ``source="unpriced"`` and price ``0`` — there is no base-price fallback.
     """
     num_nights = (end_date - start_date).days
     if num_nights <= 0:
@@ -79,7 +84,12 @@ def resolve_prices_sync(
             )
         else:
             results.append(
-                ResolvedNight(date=night, price=base_price, source="base", label=None)
+                ResolvedNight(
+                    date=night,
+                    price=Decimal("0.00"),
+                    source="unpriced",
+                    label=None,
+                )
             )
 
     return results
@@ -87,7 +97,6 @@ def resolve_prices_sync(
 
 async def resolve_prices_for_property(
     property_id: Any,
-    base_price: Decimal,
     start_date: date,
     end_date: date,
 ) -> list[ResolvedNight]:
@@ -104,7 +113,6 @@ async def resolve_prices_for_property(
     ).order_by("created_at")
 
     return resolve_prices_sync(
-        base_price=base_price,
         start_date=start_date,
         end_date=end_date,
         weekday_rules=list(weekday_rules),
@@ -121,7 +129,6 @@ async def compute_stay_totals(
     property_ids: list[Any],
     start_date: date,
     end_date: date,
-    base_prices: dict[Any, Decimal],
 ) -> dict[Any, Decimal]:
     """Compute the stay total for each property over ``[start_date, end_date)``.
 
@@ -132,11 +139,11 @@ async def compute_stay_totals(
         property_ids: Properties to price.
         start_date: Check-in date (inclusive).
         end_date: Checkout date (excluded from the nightly sum).
-        base_prices: Per-property fallback price for nights with no rule.
 
     Returns:
-        A ``{property_id: total}`` mapping. Properties with no priced nights
-        still get a total computed from their base price.
+        A ``{property_id: total}`` mapping. Properties whose stay includes an
+        unpriced night are omitted (the stay is not fully priced, so no total
+        can be shown).
     """
     from collections import defaultdict
 
@@ -166,11 +173,13 @@ async def compute_stay_totals(
     totals: dict[Any, Decimal] = {}
     for pid in property_ids:
         nights = resolve_prices_sync(
-            base_price=base_prices.get(pid, Decimal("0")),
             start_date=start_date,
             end_date=end_date,
             weekday_rules=weekdays_by_prop.get(pid, []),
             date_overrides=overrides_by_prop.get(pid, []),
         )
+        # A stay with any unpriced night is not bookable — omit its total.
+        if any(n.source == "unpriced" for n in nights):
+            continue
         totals[pid] = calculate_total(nights)
     return totals
