@@ -141,7 +141,7 @@ class Property(Model):
     translations: fields.ReverseRelation["PropertyTranslation"]
     date_prices: fields.ReverseRelation["PropertyDatePrice"]
 
-    class Meta:  # type: ignore
+    class Meta:
         table = "properties"
         ordering = ["-created_at"]
 
@@ -165,7 +165,7 @@ class PropertyTranslation(Model):
     house_rules = fields.TextField(null=True)
     search_vector = PatchedTSVectorField(null=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         table = "property_translations"
         unique_together = (("property", "locale"),)
         ordering = ["locale"]
@@ -180,7 +180,7 @@ class PropertyImage(Model):
     is_thumbnail = fields.BooleanField(default=False)
     order = fields.IntField(default=0)
 
-    class Meta:  # type: ignore
+    class Meta:
         table = "property_images"
         ordering = ["order"]
 
@@ -196,7 +196,7 @@ class PropertyUnavailability(Model):
     end_date = fields.DateField()
     reason = fields.CharField(max_length=255, null=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         table = "property_unavailabilities"
 
 
@@ -217,7 +217,7 @@ class PropertyDatePrice(Model):
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         table = "property_date_prices"
         unique_together = (("property", "date"),)
         ordering = ["date"]
