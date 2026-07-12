@@ -60,35 +60,40 @@ app/
     translations.py    # /properties/{id}/translations
     images.py          # /properties/{id}/images
     unavail.py         # /properties/{id}/unavailabilities
-    pricing.py         # /properties/{id}/pricing — weekday prices, date overrides, price resolve
+    pricing.py         # /properties/{id}/pricing — per-date prices, resolve, coverage
 tests/
   conftest.py          # Fixtures: owner_client, admin_client, anon_app, client_factory
   factories.py         # make_user(), make_admin(), property_create_payload(), etc.
   test_*.py            # One file per router + edge cases + schemas + scopes
 ```
 
-## Pricing — calendar only (no base price)
+## Pricing — per-date calendar (no weekday rules, no base price)
 
-Prices are set **exclusively** via the pricing calendar; there is no owner-entered
-base price. `Property.price_per_night` was removed (migration `0005`) in favour of
-two **system-owned** projections, never owner input, maintained by
-`app/services/pricing_cache.py`:
+Owners price the calendar **day by day**. The calendar is the sole source of
+price and availability: a date with a `PropertyDatePrice` row is bookable at that
+price; a date with no row is unpriced and therefore unavailable. There are no
+recurring weekday defaults and no base-price fallback. `Property.price_per_night`
+was removed (migration `0005`) in favour of two **system-owned** projections,
+never owner input, maintained by `app/services/pricing_cache.py`:
 
-- `price_from` — cheapest configured nightly rate (nullable; the "from X" price).
-- `has_valid_pricing` — `>=1` priced day within the `BOOKING_WINDOW_DAYS` horizon;
-  gates public listing visibility (public `GET /properties` hides properties where
-  it is false; owner-scoped `?owner_id=` listings still show unpriced drafts).
+- `price_from` — cheapest **priced night within the `[today, today + BOOKING_WINDOW_DAYS)` horizon** (nullable; the "from X" price). Past/beyond-horizon rows don't count.
+- `has_valid_pricing` — `>=1` priced night within that same horizon; gates public
+  listing visibility (public `GET /properties` hides properties where it is false;
+  owner-scoped `?owner_id=` listings still show unpriced drafts).
 
-`sync_pricing_cache(property_id)` refreshes both on every weekday/override write.
-`scripts/recompute_pricing_cache.py` (nightly cron) corrects horizon drift for
-override-only properties whose overrides age out of the window.
+`sync_pricing_cache(property_id)` refreshes both on every calendar write.
+`scripts/recompute_pricing_cache.py` (nightly cron) corrects horizon drift as
+priced nights age out of / into the window.
 
-Models: `PropertyWeekdayPrice` (0=Mon…6=Sun), `PropertyDatePriceOverride` (date range + optional label).
+Model: `PropertyDatePrice` (`property_id`, `date`, `price`; unique on `(property, date)`) — migration `0006` dropped `property_weekday_prices` + `property_date_price_overrides` (no back-fill).
 Router: `app/routers/pricing.py` — prefix `/properties/{property_id}/pricing`.
 Auth: public GETs; mutations require `properties:schedule` scope (owner) or `admin:properties:write` (admin).
-Priority: date override › weekday. A night with neither is **unpriced** (source `unpriced`, price 0) — unbookable, no base-price fallback.
-Resolution: `GET /pricing/resolve?start_date=&end_date=` returns the per-night breakdown (source `weekday` | `date_override`), or **409** with `unpriced_dates` when any night is unpriced.
-Coverage: `GET /pricing/coverage?start=&end=` returns `unpriced_windows` (`[start_date, end_date)`, end-exclusive) — used by the frontend date picker to disable unbookable days (`app/services/coverage.py`). `GET /properties/{id}/unavailabilities` returns **real owner blocks only** (the old `include_price_gaps` synthesis is gone).
+Editing (both map to per-date rows):
+- `GET /pricing/dates?from_date=&to_date=` — list priced nights.
+- `PUT /pricing/dates` `{start_date, end_date, price}` — upsert every night in the inclusive range to one price (`start_date == end_date` sets a single day). One request per range edit.
+- `DELETE /pricing/dates?start_date=&end_date=` — clear the inclusive range; those nights become unpriced/unavailable.
+Resolution: `GET /pricing/resolve?start_date=&end_date=` returns the per-night breakdown (source `date`), or **409** with `unpriced_dates` when any night is unpriced. Contract unchanged, so bookings-ms needs no change.
+Coverage: `GET /pricing/coverage?start=&end=` returns `unpriced_windows` (`[start_date, end_date)`, end-exclusive) — used by the frontend date picker to disable unbookable days (`app/services/coverage.py`). `GET /properties/{id}/unavailabilities` returns **real owner blocks only**.
 Tested in `tests/test_pricing_router.py`, `tests/test_price_resolver.py`, `tests/test_coverage.py`, `tests/test_pricing_cache.py`.
 
 ## ms-core

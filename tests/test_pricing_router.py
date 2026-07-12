@@ -1,6 +1,7 @@
-"""Integration tests for GET/PUT /properties/{id}/pricing/weekdays,
-GET/POST/PATCH/DELETE /properties/{id}/pricing/overrides, and
-GET /properties/{id}/pricing/resolve.
+"""Integration tests for the per-date pricing router:
+GET/PUT/DELETE /properties/{id}/pricing/dates,
+GET /properties/{id}/pricing/resolve, and
+GET /properties/{id}/pricing/coverage.
 
 All CRUD calls are mocked — no database required.
 """
@@ -34,28 +35,15 @@ from tests.factories import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-WEEKDAY_RULE_ID = uuid4()
-OVERRIDE_ID = uuid4()
+DATE_PRICE_ID = uuid4()
 
 
-def weekday_price_out(**overrides) -> dict:
+def date_price_out(**overrides) -> dict:
     base = {
-        "id": str(WEEKDAY_RULE_ID),
+        "id": str(DATE_PRICE_ID),
         "property_id": str(PROPERTY_ID),
-        "weekday": 0,
-        "price": "75.00",
-    }
-    return {**base, **overrides}
-
-
-def override_out(**overrides) -> dict:
-    base = {
-        "id": str(OVERRIDE_ID),
-        "property_id": str(PROPERTY_ID),
-        "start_date": "2026-12-25",
-        "end_date": "2026-12-25",
+        "date": "2026-12-25",
         "price": "150.00",
-        "label": "Christmas",
     }
     return {**base, **overrides}
 
@@ -90,104 +78,34 @@ def admin_client():
 
 
 # ---------------------------------------------------------------------------
-# Weekday prices — list
+# Date prices — list
 # ---------------------------------------------------------------------------
 
 
-def test_list_weekday_prices_public(owner_client):
-    with patch("app.routers.pricing.weekday_price_crud") as mock:
-        mock.list_for_property = AsyncMock(return_value=[weekday_price_out()])
-        resp = owner_client.get(f"/properties/{PROPERTY_ID}/pricing/weekdays")
+def test_list_date_prices_public(owner_client):
+    with patch("app.routers.pricing.date_price_crud") as mock:
+        mock.list_for_property = AsyncMock(return_value=[date_price_out()])
+        resp = owner_client.get(f"/properties/{PROPERTY_ID}/pricing/dates")
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) == 1
-    assert data[0]["weekday"] == 0
-    assert data[0]["price"] == "75.00"
+    assert data[0]["date"] == "2026-12-25"
+    assert data[0]["price"] == "150.00"
 
 
-def test_list_weekday_prices_empty(owner_client):
-    with patch("app.routers.pricing.weekday_price_crud") as mock:
+def test_list_date_prices_empty(owner_client):
+    with patch("app.routers.pricing.date_price_crud") as mock:
         mock.list_for_property = AsyncMock(return_value=[])
-        resp = owner_client.get(f"/properties/{PROPERTY_ID}/pricing/weekdays")
+        resp = owner_client.get(f"/properties/{PROPERTY_ID}/pricing/dates")
     assert resp.status_code == 200
     assert resp.json() == []
 
 
-# ---------------------------------------------------------------------------
-# Weekday prices — upsert
-# ---------------------------------------------------------------------------
-
-
-def test_put_weekday_prices_owner(owner_client):
-    payload = [{"weekday": 5, "price": "90.00"}, {"weekday": 6, "price": "90.00"}]
-    with (
-        patch("app.routers.pricing.assert_owns_property", new_callable=AsyncMock),
-        patch("app.routers.pricing.sync_pricing_cache", new_callable=AsyncMock) as sync,
-        patch("app.routers.pricing.weekday_price_crud") as mock,
-    ):
-        mock.upsert_all = AsyncMock(
-            return_value=[
-                weekday_price_out(weekday=5, price="90.00"),
-                weekday_price_out(weekday=6, price="90.00"),
-            ]
-        )
-        resp = owner_client.put(
-            f"/properties/{PROPERTY_ID}/pricing/weekdays", json=payload
-        )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert len(data) == 2
-    sync.assert_awaited_once_with(PROPERTY_ID)
-
-
-def test_put_weekday_prices_duplicate_weekday_rejected(owner_client):
-    payload = [{"weekday": 0, "price": "90.00"}, {"weekday": 0, "price": "95.00"}]
-    resp = owner_client.put(f"/properties/{PROPERTY_ID}/pricing/weekdays", json=payload)
-    assert resp.status_code == 422
-
-
-def test_put_weekday_prices_invalid_weekday_rejected(owner_client):
-    payload = [{"weekday": 7, "price": "90.00"}]
-    resp = owner_client.put(f"/properties/{PROPERTY_ID}/pricing/weekdays", json=payload)
-    assert resp.status_code == 422
-
-
-def test_put_weekday_prices_no_schedule_scope_forbidden(client_factory=None):
-    user = make_user_without_scopes(PropertyScope.SCHEDULE)
-    app = FastAPI()
-    app.include_router(router)
-    app.state.limiter = limiter
-
-    async def _user():
-        return user
-
-    app.dependency_overrides[get_current_user] = _user
-    client = TestClient(app, raise_server_exceptions=False)
-    resp = client.put(
-        f"/properties/{PROPERTY_ID}/pricing/weekdays",
-        json=[{"weekday": 0, "price": "90.00"}],
-    )
-    assert resp.status_code == 403
-
-
-# ---------------------------------------------------------------------------
-# Date overrides — list
-# ---------------------------------------------------------------------------
-
-
-def test_list_overrides_public(owner_client):
-    with patch("app.routers.pricing.date_override_crud") as mock:
-        mock.list_for_property = AsyncMock(return_value=[override_out()])
-        resp = owner_client.get(f"/properties/{PROPERTY_ID}/pricing/overrides")
-    assert resp.status_code == 200
-    assert len(resp.json()) == 1
-
-
-def test_list_overrides_with_date_filter(owner_client):
-    with patch("app.routers.pricing.date_override_crud") as mock:
+def test_list_date_prices_with_date_filter(owner_client):
+    with patch("app.routers.pricing.date_price_crud") as mock:
         mock.list_for_property = AsyncMock(return_value=[])
         resp = owner_client.get(
-            f"/properties/{PROPERTY_ID}/pricing/overrides",
+            f"/properties/{PROPERTY_ID}/pricing/dates",
             params={"from_date": "2026-12-01", "to_date": "2026-12-31"},
         )
     assert resp.status_code == 200
@@ -199,106 +117,101 @@ def test_list_overrides_with_date_filter(owner_client):
 
 
 # ---------------------------------------------------------------------------
-# Date overrides — create
+# Date prices — set range
 # ---------------------------------------------------------------------------
 
 
-def test_create_override_owner(owner_client):
-    payload = {
-        "start_date": "2026-12-25",
-        "end_date": "2026-12-25",
-        "price": "150.00",
-        "label": "Christmas",
-    }
+def test_set_date_prices_range_owner(owner_client):
+    payload = {"start_date": "2026-12-24", "end_date": "2026-12-26", "price": "150.00"}
     with (
         patch("app.routers.pricing.assert_owns_property", new_callable=AsyncMock),
         patch("app.routers.pricing.sync_pricing_cache", new_callable=AsyncMock) as sync,
-        patch("app.routers.pricing.date_override_crud") as mock,
+        patch("app.routers.pricing.date_price_crud") as mock,
     ):
-        mock.create_for_property = AsyncMock(return_value=override_out())
-        resp = owner_client.post(
-            f"/properties/{PROPERTY_ID}/pricing/overrides", json=payload
+        mock.upsert_range = AsyncMock(
+            return_value=[
+                date_price_out(date="2026-12-24"),
+                date_price_out(date="2026-12-25"),
+                date_price_out(date="2026-12-26"),
+            ]
         )
-    assert resp.status_code == 201
-    assert resp.json()["label"] == "Christmas"
+        resp = owner_client.put(
+            f"/properties/{PROPERTY_ID}/pricing/dates", json=payload
+        )
+    assert resp.status_code == 200
+    assert len(resp.json()) == 3
     sync.assert_awaited_once_with(PROPERTY_ID)
 
 
-def test_create_override_invalid_dates_rejected(owner_client):
-    payload = {
-        "start_date": "2026-12-26",
-        "end_date": "2026-12-25",
-        "price": "150.00",
-    }
-    resp = owner_client.post(
-        f"/properties/{PROPERTY_ID}/pricing/overrides", json=payload
-    )
+def test_set_date_prices_single_day(owner_client):
+    payload = {"start_date": "2026-12-25", "end_date": "2026-12-25", "price": "150.00"}
+    with (
+        patch("app.routers.pricing.assert_owns_property", new_callable=AsyncMock),
+        patch("app.routers.pricing.sync_pricing_cache", new_callable=AsyncMock) as sync,
+        patch("app.routers.pricing.date_price_crud") as mock,
+    ):
+        mock.upsert_range = AsyncMock(return_value=[date_price_out()])
+        resp = owner_client.put(
+            f"/properties/{PROPERTY_ID}/pricing/dates", json=payload
+        )
+    assert resp.status_code == 200
+    assert len(resp.json()) == 1
+    sync.assert_awaited_once_with(PROPERTY_ID)
+
+
+def test_set_date_prices_invalid_range_rejected(owner_client):
+    payload = {"start_date": "2026-12-26", "end_date": "2026-12-25", "price": "150.00"}
+    resp = owner_client.put(f"/properties/{PROPERTY_ID}/pricing/dates", json=payload)
     assert resp.status_code == 422
 
 
+def test_set_date_prices_no_schedule_scope_forbidden():
+    user = make_user_without_scopes(PropertyScope.SCHEDULE)
+    app = FastAPI()
+    app.include_router(router)
+    app.state.limiter = limiter
+
+    async def _user():
+        return user
+
+    app.dependency_overrides[get_current_user] = _user
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.put(
+        f"/properties/{PROPERTY_ID}/pricing/dates",
+        json={"start_date": "2026-12-25", "end_date": "2026-12-25", "price": "90.00"},
+    )
+    assert resp.status_code == 403
+
+
 # ---------------------------------------------------------------------------
-# Date overrides — update
+# Date prices — clear range
 # ---------------------------------------------------------------------------
 
 
-def test_update_override_owner(owner_client):
-    payload = {"price": "175.00"}
+def test_clear_date_prices_owner(owner_client):
     with (
         patch("app.routers.pricing.assert_owns_property", new_callable=AsyncMock),
         patch("app.routers.pricing.sync_pricing_cache", new_callable=AsyncMock) as sync,
-        patch("app.routers.pricing.date_override_crud") as mock,
+        patch("app.routers.pricing.date_price_crud") as mock,
     ):
-        mock.update = AsyncMock(return_value=override_out(price="175.00"))
-        resp = owner_client.patch(
-            f"/properties/{PROPERTY_ID}/pricing/overrides/{OVERRIDE_ID}", json=payload
-        )
-    assert resp.status_code == 200
-    assert resp.json()["price"] == "175.00"
-    sync.assert_awaited_once_with(PROPERTY_ID)
-
-
-def test_update_override_not_found(owner_client):
-    payload = {"price": "175.00"}
-    with (
-        patch("app.routers.pricing.assert_owns_property", new_callable=AsyncMock),
-        patch("app.routers.pricing.date_override_crud") as mock,
-    ):
-        mock.update = AsyncMock(return_value=None)
-        resp = owner_client.patch(
-            f"/properties/{PROPERTY_ID}/pricing/overrides/{OVERRIDE_ID}", json=payload
-        )
-    assert resp.status_code == 404
-
-
-# ---------------------------------------------------------------------------
-# Date overrides — delete
-# ---------------------------------------------------------------------------
-
-
-def test_delete_override_owner(owner_client):
-    with (
-        patch("app.routers.pricing.assert_owns_property", new_callable=AsyncMock),
-        patch("app.routers.pricing.sync_pricing_cache", new_callable=AsyncMock) as sync,
-        patch("app.routers.pricing.date_override_crud") as mock,
-    ):
-        mock.delete = AsyncMock(return_value=True)
+        mock.delete_range = AsyncMock(return_value=3)
         resp = owner_client.delete(
-            f"/properties/{PROPERTY_ID}/pricing/overrides/{OVERRIDE_ID}"
+            f"/properties/{PROPERTY_ID}/pricing/dates",
+            params={"start_date": "2026-12-24", "end_date": "2026-12-26"},
         )
     assert resp.status_code == 204
+    mock.delete_range.assert_awaited_once_with(
+        PROPERTY_ID, date(2026, 12, 24), date(2026, 12, 26)
+    )
     sync.assert_awaited_once_with(PROPERTY_ID)
 
 
-def test_delete_override_not_found(owner_client):
-    with (
-        patch("app.routers.pricing.assert_owns_property", new_callable=AsyncMock),
-        patch("app.routers.pricing.date_override_crud") as mock,
-    ):
-        mock.delete = AsyncMock(return_value=False)
-        resp = owner_client.delete(
-            f"/properties/{PROPERTY_ID}/pricing/overrides/{OVERRIDE_ID}"
-        )
-    assert resp.status_code == 404
+def test_clear_date_prices_invalid_range_rejected(owner_client):
+    resp = owner_client.delete(
+        f"/properties/{PROPERTY_ID}/pricing/dates",
+        params={"start_date": "2026-12-26", "end_date": "2026-12-24"},
+    )
+    assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------------------
@@ -312,13 +225,10 @@ def test_resolve_returns_breakdown(owner_client):
 
     nights = [
         MagicMock(
-            date=date(2026, 6, 8),
-            price=Decimal("50.00"),
-            source="date_override",
-            label="Sale",
+            date=date(2026, 6, 8), price=Decimal("50.00"), source="date", label=None
         ),
         MagicMock(
-            date=date(2026, 6, 9), price=Decimal("75.00"), source="weekday", label=None
+            date=date(2026, 6, 9), price=Decimal("75.00"), source="date", label=None
         ),
     ]
 
@@ -341,8 +251,8 @@ def test_resolve_returns_breakdown(owner_client):
     assert body["currency"] == "EUR"
     assert body["total"] == "125.00"
     assert len(body["nights"]) == 2
-    assert body["nights"][0]["source"] == "date_override"
-    assert body["nights"][1]["source"] == "weekday"
+    assert body["nights"][0]["source"] == "date"
+    assert body["nights"][1]["source"] == "date"
 
 
 def test_resolve_returns_409_for_unpriced_nights(owner_client):
@@ -351,7 +261,7 @@ def test_resolve_returns_409_for_unpriced_nights(owner_client):
 
     nights = [
         MagicMock(
-            date=date(2026, 6, 8), price=Decimal("75.00"), source="weekday", label=None
+            date=date(2026, 6, 8), price=Decimal("75.00"), source="date", label=None
         ),
         MagicMock(
             date=date(2026, 6, 9),

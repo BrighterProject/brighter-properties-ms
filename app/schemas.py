@@ -403,8 +403,7 @@ class PropertyResponse(PropertyBase):
     translations: list[TranslationResponse] = Field(default_factory=list)
     images: list[PropertyImageResponse] = Field(default_factory=list)
     unavailabilities: list[PropertyUnavailabilityResponse] = Field(default_factory=list)
-    weekday_prices: list[WeekdayPriceOut] = Field(default_factory=list)
-    date_price_overrides: list[DatePriceOverrideOut] = Field(default_factory=list)
+    date_prices: list[DatePriceOut] = Field(default_factory=list)
 
     # Not stored on the model — injected from settings so the booking flow and
     # frontend know how far in advance this property can be booked.
@@ -454,58 +453,33 @@ class PropertyListItem(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class WeekdayPriceIn(BaseModel):
-    weekday: int = Field(..., ge=0, le=6, description="0=Monday … 6=Sunday")
-    price: Decimal = Field(..., ge=0, decimal_places=2)
+class DatePriceOut(BaseModel):
+    """A single priced night."""
 
-
-class WeekdayPriceOut(WeekdayPriceIn):
     id: UUID
     property_id: UUID
+    date: date
+    price: Decimal
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class DatePriceOverrideIn(BaseModel):
+class DateRangePriceIn(BaseModel):
+    """Apply one nightly price to every day in ``[start_date, end_date]`` (inclusive)."""
+
     start_date: date
     end_date: date
     price: Decimal = Field(..., ge=0, decimal_places=2)
-    label: str | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")
-    def end_on_or_after_start(self) -> DatePriceOverrideIn:
+    def end_on_or_after_start(self) -> DateRangePriceIn:
         if self.end_date < self.start_date:
             raise ValueError("end_date must be >= start_date")
         return self
 
 
-class DatePriceOverrideUpdate(BaseModel):
-    start_date: date | None = None
-    end_date: date | None = None
-    price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
-    label: str | None = Field(default=None, max_length=100)
-
-    @model_validator(mode="after")
-    def end_on_or_after_start(self) -> DatePriceOverrideUpdate:
-        if self.start_date and self.end_date and self.end_date < self.start_date:
-            raise ValueError("end_date must be >= start_date")
-        return self
-
-
-class DatePriceOverrideOut(BaseModel):
-    id: UUID
-    property_id: UUID
-    start_date: date
-    end_date: date
-    price: Decimal
-    label: str | None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class PriceSource(StrEnum):
-    WEEKDAY = "weekday"
-    DATE_OVERRIDE = "date_override"
+    DATE = "date"
     UNPRICED = "unpriced"
 
 

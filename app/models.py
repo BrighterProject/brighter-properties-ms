@@ -139,8 +139,7 @@ class Property(Model):
     images: fields.ReverseRelation["PropertyImage"]
     unavailabilities: fields.ReverseRelation["PropertyUnavailability"]
     translations: fields.ReverseRelation["PropertyTranslation"]
-    weekday_prices: fields.ReverseRelation["PropertyWeekdayPrice"]
-    date_price_overrides: fields.ReverseRelation["PropertyDatePriceOverride"]
+    date_prices: fields.ReverseRelation["PropertyDatePrice"]
 
     class Meta:  # type: ignore
         table = "properties"
@@ -201,38 +200,24 @@ class PropertyUnavailability(Model):
         table = "property_unavailabilities"
 
 
-class PropertyWeekdayPrice(Model):
-    """Per-weekday price override. 0=Monday, 6=Sunday (ISO weekday)."""
+class PropertyDatePrice(Model):
+    """One priced night. The calendar is the sole source of price and availability.
+
+    A date with a row is bookable at ``price``; a date with no row is unpriced and
+    therefore unavailable. There are no recurring weekday defaults and no
+    base-price fallback.
+    """
 
     id = fields.UUIDField(primary_key=True)
     property = fields.ForeignKeyField(
-        "models.Property", related_name="weekday_prices", on_delete=fields.CASCADE
+        "models.Property", related_name="date_prices", on_delete=fields.CASCADE
     )
-    weekday = fields.IntField()  # 0–6
+    date = fields.DateField()
     price = fields.DecimalField(max_digits=8, decimal_places=2)
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
 
     class Meta:  # type: ignore
-        table = "property_weekday_prices"
-        unique_together = (("property", "weekday"),)
-        ordering = ["weekday"]
-
-
-class PropertyDatePriceOverride(Model):
-    """Holiday/special-date price override for a date range (inclusive on both ends)."""
-
-    id = fields.UUIDField(primary_key=True)
-    property = fields.ForeignKeyField(
-        "models.Property", related_name="date_price_overrides", on_delete=fields.CASCADE
-    )
-    start_date = fields.DateField()
-    end_date = fields.DateField()
-    price = fields.DecimalField(max_digits=8, decimal_places=2)
-    label = fields.CharField(max_length=100, null=True)
-    created_at = fields.DatetimeField(auto_now_add=True)
-    updated_at = fields.DatetimeField(auto_now=True)
-
-    class Meta:  # type: ignore
-        table = "property_date_price_overrides"
-        ordering = ["start_date", "created_at"]
+        table = "property_date_prices"
+        unique_together = (("property", "date"),)
+        ordering = ["date"]
