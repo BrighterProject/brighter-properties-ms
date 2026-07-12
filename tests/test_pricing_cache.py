@@ -16,6 +16,7 @@ from uuid import uuid4
 from app.services.pricing_cache import (
     compute_price_from,
     has_valid_pricing,
+    recompute_all_pricing_cache,
     sync_pricing_cache,
 )
 
@@ -26,6 +27,10 @@ def _weekday(price: str) -> SimpleNamespace:
 
 def _override(price: str, start: date, end: date) -> SimpleNamespace:
     return SimpleNamespace(price=Decimal(price), start_date=start, end_date=end)
+
+
+TODAY = date(2026, 7, 11)
+HORIZON = 180
 
 
 class _AwaitableList:
@@ -47,32 +52,43 @@ class _AwaitableList:
 
 
 def test_price_from_none_when_no_pricing():
-    assert compute_price_from([], []) is None
+    assert compute_price_from([], [], today=TODAY) is None
 
 
 def test_price_from_min_across_weekdays():
-    assert compute_price_from([_weekday("90"), _weekday("70")], []) == Decimal("70")
+    assert compute_price_from(
+        [_weekday("90"), _weekday("70")], [], today=TODAY
+    ) == Decimal("70")
 
 
 def test_price_from_min_across_overrides():
-    d = date(2026, 8, 1)
+    d = TODAY + timedelta(days=20)
     overrides = [_override("150", d, d), _override("60", d, d)]
-    assert compute_price_from([], overrides) == Decimal("60")
+    assert compute_price_from([], overrides, today=TODAY) == Decimal("60")
 
 
 def test_price_from_spans_both_sources():
-    d = date(2026, 8, 1)
-    assert compute_price_from([_weekday("90")], [_override("45.50", d, d)]) == Decimal(
-        "45.50"
-    )
+    d = TODAY + timedelta(days=20)
+    assert compute_price_from(
+        [_weekday("90")], [_override("45.50", d, d)], today=TODAY
+    ) == Decimal("45.50")
+
+
+def test_price_from_excludes_expired_overrides():
+    # A cheap past special must not drag the public "from X" price down.
+    past = _override("10", TODAY - timedelta(days=90), TODAY - timedelta(days=60))
+    assert compute_price_from([_weekday("90")], [past], today=TODAY) == Decimal("90")
+
+
+def test_price_from_includes_override_ending_today():
+    # end_date is inclusive: an override whose last night is today still counts.
+    ending = _override("40", TODAY - timedelta(days=3), TODAY)
+    assert compute_price_from([_weekday("90")], [ending], today=TODAY) == Decimal("40")
 
 
 # ---------------------------------------------------------------------------
 # has_valid_pricing
 # ---------------------------------------------------------------------------
-
-TODAY = date(2026, 7, 11)
-HORIZON = 180
 
 
 def test_valid_false_without_pricing():
@@ -180,3 +196,63 @@ def test_sync_ignores_missing_property():
     ):
         # No weekday/override access should be required when the property is gone.
         asyncio.run(sync_pricing_cache(uuid4(), today=TODAY))
+
+
+# ---------------------------------------------------------------------------
+# recompute_all_pricing_cache
+# ---------------------------------------------------------------------------
+
+
+def _prop(pid, price_from, valid) -> MagicMock:
+    prop = MagicMock()
+    prop.id = pid
+    prop.price_from = price_from
+    prop.has_valid_pricing = valid
+    return prop
+
+
+def _weekday_row(pid, price: str) -> SimpleNamespace:
+    return SimpleNamespace(property_id=pid, price=Decimal(price))
+
+
+def _run_recompute(properties, weekday_rows, override_rows) -> tuple[int, list]:
+    bulk_update = AsyncMock()
+    with (
+        patch(
+            "app.models.Property.all",
+            MagicMock(return_value=_AwaitableList(properties)),
+        ),
+        patch(
+            "app.models.PropertyWeekdayPrice.all",
+            MagicMock(return_value=_AwaitableList(weekday_rows)),
+        ),
+        patch(
+            "app.models.PropertyDatePriceOverride.all",
+            MagicMock(return_value=_AwaitableList(override_rows)),
+        ),
+        patch("app.models.Property.bulk_update", bulk_update),
+    ):
+        count = asyncio.run(recompute_all_pricing_cache(today=TODAY))
+    return count, bulk_update.await_args_list
+
+
+def test_recompute_bulk_updates_only_changed_properties():
+    p1 = uuid4()  # needs update: no cache set yet, has a weekday rule
+    p2 = uuid4()  # already correct: skipped
+    props = [_prop(p1, None, False), _prop(p2, Decimal("50"), True)]
+    weekdays = [_weekday_row(p1, "80"), _weekday_row(p2, "50")]
+    count, calls = _run_recompute(props, weekdays, [])
+
+    assert count == 2
+    assert len(calls) == 1
+    updated = calls[0].args[0]
+    assert [p.id for p in updated] == [p1]
+    assert updated[0].price_from == Decimal("80")
+    assert updated[0].has_valid_pricing is True
+    assert calls[0].kwargs["fields"] == ["price_from", "has_valid_pricing"]
+
+
+def test_recompute_no_properties_skips_bulk_update():
+    count, calls = _run_recompute([], [], [])
+    assert count == 0
+    assert calls == []
