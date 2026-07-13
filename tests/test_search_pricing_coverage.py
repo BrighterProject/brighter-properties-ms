@@ -47,7 +47,9 @@ async def _make_property(*, priced_ranges: list[tuple[date, date]]) -> uuid.UUID
     return prop.id
 
 
-async def _run_search(*, priced_ranges: list[tuple[date, date]]) -> tuple[uuid.UUID, list]:
+async def _run_search(
+    *, priced_ranges: list[tuple[date, date]]
+) -> tuple[uuid.UUID, list]:
     await Tortoise.init(db_url="sqlite://:memory:", modules={"models": ["app.models"]})
     await Tortoise.generate_schemas()
     try:
@@ -55,7 +57,7 @@ async def _run_search(*, priced_ranges: list[tuple[date, date]]) -> tuple[uuid.U
         filters = PropertyFilters(
             available_from=date(2026, 7, 13), available_to=date(2026, 7, 16)
         )
-        results = await property_crud.list_properties(filters)
+        results, _total = await property_crud.list_properties(filters)
         return property_id, results
     finally:
         await Tortoise.close_connections()

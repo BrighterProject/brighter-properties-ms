@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from decimal import Decimal
 from functools import lru_cache
 from uuid import UUID
 
@@ -11,6 +12,7 @@ from ms_core import CRUD
 from tortoise import Tortoise
 from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.expressions import Q
+from tortoise.functions import Coalesce
 from tortoise.query_utils import Prefetch
 
 from app import settings
@@ -93,6 +95,117 @@ def _resolve_translation(translations, locale: str):
 def _resolve_name(translations, locale: str) -> str:
     tr = _resolve_translation(translations, locale)
     return tr.name if tr else FALLBACK_NAME
+
+
+# Sentinels push NULL price_from to the end regardless of sort direction (SQLite
+# and Postgres order NULLs differently, so we coalesce instead of relying on it).
+_NULL_PRICE_HIGH = Decimal("99999999")
+_NULL_PRICE_LOW = Decimal("-1")
+
+
+def _apply_list_order(qs, order_by: str):
+    """Apply a stable DB-level ordering to the (no-dates) listing queryset.
+
+    ``recommended`` is left unordered (the historical default / FTS-rank path).
+    Price sorts coalesce NULL ``price_from`` to a sentinel so unpriced drafts
+    always sort last; ``id`` is the deterministic tie-breaker for pagination.
+    """
+    if order_by == "price_asc":
+        return qs.annotate(
+            _sort_price=Coalesce("price_from", _NULL_PRICE_HIGH)
+        ).order_by("_sort_price", "id")
+    if order_by == "price_desc":
+        return qs.annotate(
+            _sort_price=Coalesce("price_from", _NULL_PRICE_LOW)
+        ).order_by("-_sort_price", "id")
+    if order_by == "rating_desc":
+        return qs.order_by("-rating", "-total_reviews", "id")
+    return qs
+
+
+async def _order_dated_ids(
+    surviving: list[UUID],
+    order_by: str,
+    avg_by_id: dict[UUID, Decimal],
+    rank_map: dict[str, float],
+) -> list[UUID]:
+    """Order the surviving (fully-priced) ids for a dated search.
+
+    Done Python-side because the effective price is the resolved per-stay average
+    (from ``compute_stay_totals``), not a DB column. Python's stable sort keeps
+    candidate (DB) order for ties and for the ``recommended`` no-search case.
+    """
+    if order_by == "price_asc":
+        return sorted(surviving, key=lambda pid: avg_by_id[pid])
+    if order_by == "price_desc":
+        return sorted(surviving, key=lambda pid: avg_by_id[pid], reverse=True)
+    if order_by == "rating_desc":
+        ratings: dict[UUID, Decimal] = dict(
+            await Property.filter(id__in=surviving).values_list("id", "rating")
+        )
+        return sorted(
+            surviving, key=lambda pid: ratings.get(pid) or Decimal(0), reverse=True
+        )
+    if rank_map:  # recommended with an FTS search term
+        return sorted(
+            surviving, key=lambda pid: rank_map.get(str(pid), 0.0), reverse=True
+        )
+    return surviving
+
+
+def _resolve_detail_city(
+    resp: PropertyResponse, settlement_ekatte: str | None, locale: str
+) -> PropertyResponse:
+    """Return ``resp`` with ``city`` resolved from the settlement.
+
+    Mirrors ``_build_list_item``: the settlement name in the requested locale
+    wins, falling back to the legacy free-text ``city`` when the settlement is
+    absent or unknown. Returns a copy — the input is left untouched.
+    """
+    return resp.model_copy(
+        update={"city": resolve_city_name(settlement_ekatte, locale) or resp.city}
+    )
+
+
+def _build_list_item(
+    v,
+    locale: str,
+    *,
+    stay_total: Decimal | None = None,
+    stay_nights: int | None = None,
+) -> PropertyListItem:
+    """Project a prefetched Property row into a ``PropertyListItem``.
+
+    Requires ``images`` and ``translations`` to be prefetched on ``v``.
+    """
+    thumbnail = next(
+        (img.url for img in v.images if img.is_thumbnail),  # type: ignore[union-attr]
+        None,
+    )
+    tr = _resolve_translation(v.translations, locale)  # type: ignore[union-attr]
+    return PropertyListItem(
+        id=v.id,
+        name=tr.name if tr else FALLBACK_NAME,
+        description=tr.description if tr else "",
+        region_code=v.region_code,
+        settlement_ekatte=v.settlement_ekatte,
+        city=resolve_city_name(v.settlement_ekatte, locale) or v.city,
+        latitude=v.latitude,
+        longitude=v.longitude,
+        property_type=v.property_type,
+        status=PropertyStatus(v.status),
+        price_from=v.price_from,
+        currency=v.currency,
+        max_guests=v.max_guests,
+        bedrooms=v.bedrooms,
+        rooms=v.rooms,
+        rating=v.rating,
+        total_reviews=v.total_reviews,
+        thumbnail=thumbnail,
+        cancellation_policy=v.cancellation_policy,
+        stay_total=stay_total,
+        stay_nights=stay_nights,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -336,16 +449,25 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
     async def count_by_owner(self, owner_id: UUID) -> int:
         return await Property.filter(owner_id=owner_id).count()
 
-    async def get_property(self, property_id: UUID) -> PropertyResponse | None:
+    async def get_property(
+        self, property_id: UUID, locale: str = settings.DEFAULT_LOCALE
+    ) -> PropertyResponse | None:
         inst = await Property.get_or_none(id=property_id).prefetch_related(*PREFETCH)
 
         if not inst:
             return None
 
-        return PropertyResponse.model_validate(inst, from_attributes=True)
+        return _resolve_detail_city(
+            PropertyResponse.model_validate(inst, from_attributes=True),
+            inst.settlement_ekatte,
+            locale,
+        )
 
     async def get_property_for_owner(
-        self, property_id: UUID, owner_id: UUID
+        self,
+        property_id: UUID,
+        owner_id: UUID,
+        locale: str = settings.DEFAULT_LOCALE,
     ) -> PropertyResponse | None:
         try:
             inst = await Property.get(
@@ -353,7 +475,11 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             ).prefetch_related(*PREFETCH)
         except DoesNotExist:
             return None
-        return PropertyResponse.model_validate(inst, from_attributes=True)
+        return _resolve_detail_city(
+            PropertyResponse.model_validate(inst, from_attributes=True),
+            inst.settlement_ekatte,
+            locale,
+        )
 
     async def get_properties_by_ids(
         self, ids: list[UUID], locale: str = settings.DEFAULT_LOCALE
@@ -361,43 +487,18 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         properties = await Property.filter(id__in=ids).prefetch_related(
             "images", "translations"
         )
-        results: list[PropertyListItem] = []
-        for v in properties:
-            thumbnail = next(
-                (img.url for img in v.images if img.is_thumbnail),  # type: ignore[union-attr]
-                None,
-            )
-            tr = _resolve_translation(v.translations, locale)  # type: ignore[union-attr]
-            results.append(
-                PropertyListItem(
-                    id=v.id,
-                    name=tr.name if tr else FALLBACK_NAME,
-                    description=tr.description if tr else "",
-                    region_code=v.region_code,
-                    settlement_ekatte=v.settlement_ekatte,
-                    city=resolve_city_name(v.settlement_ekatte, locale) or v.city,
-                    latitude=v.latitude,
-                    longitude=v.longitude,
-                    property_type=v.property_type,
-                    status=PropertyStatus(v.status),
-                    price_from=v.price_from,
-                    currency=v.currency,
-                    max_guests=v.max_guests,
-                    bedrooms=v.bedrooms,
-                    rooms=v.rooms,
-                    rating=v.rating,
-                    total_reviews=v.total_reviews,
-                    thumbnail=thumbnail,
-                    cancellation_policy=v.cancellation_policy,
-                )
-            )
-        return results
+        return [_build_list_item(v, locale) for v in properties]
 
     async def list_properties(
         self, filters: PropertyFilters, locale: str = settings.DEFAULT_LOCALE
-    ) -> list[PropertyListItem]:
+    ) -> tuple[list[PropertyListItem], int]:
+        """Return ``(page_items, total)`` where ``total`` is the pre-pagination
+        match count (surfaced as ``X-Total-Count`` by the router)."""
         qs = Property.all()
         rank_map: dict[str, float] = {}
+        has_dates = (
+            filters.available_from is not None and filters.available_to is not None
+        )
 
         if filters.status is not None:
             qs = qs.filter(status=filters.status)
@@ -433,7 +534,7 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                         [pg_cfg, term, locale],
                     )
                     if not rows:
-                        return []
+                        return [], 0
                     rank_map = {r["pid"]: float(r["rank"]) for r in rows}
                     qs = qs.filter(id__in=list(rank_map.keys()))
         if filters.property_type is not None:
@@ -445,10 +546,14 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         if filters.amenities:
             for amenity in filters.amenities:
                 qs = qs.filter(amenities__contains=f'"{amenity}"')
-        if filters.min_price is not None:
-            qs = qs.filter(price_from__gte=filters.min_price)
-        if filters.max_price is not None:
-            qs = qs.filter(price_from__lte=filters.max_price)
+        # Without a date range, the price filter operates on ``price_from`` (the
+        # "from X" cheapest night). With dates it operates on the resolved stay
+        # rate and is applied in ``_list_with_dates`` after pricing the calendar.
+        if not has_dates:
+            if filters.min_price is not None:
+                qs = qs.filter(price_from__gte=filters.min_price)
+            if filters.max_price is not None:
+                qs = qs.filter(price_from__lte=filters.max_price)
         if filters.min_rating is not None:
             qs = qs.filter(rating__gte=filters.min_rating)
         if filters.min_guests is not None:
@@ -463,33 +568,20 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             # Public browse: hide properties with no bookable (priced) days.
             qs = qs.filter(has_valid_pricing=True)
 
-        stay_nights: int | None = None
-        stay_totals: dict = {}
-        if filters.available_from is not None and filters.available_to is not None:
-            af = filters.available_from
-            at = filters.available_to
-            # Overlap: unavail.start < checkOut AND unavail.end > checkIn
-            unavailable_ids = await PropertyUnavailability.filter(
-                start_date__lt=at,
-                end_date__gt=af,
-            ).values_list("property_id", flat=True)
-            booked_ids = await _get_booked_property_ids(af, at)
-            excluded = set(map(str, unavailable_ids)) | {str(bid) for bid in booked_ids}
-            if excluded:
-                qs = qs.exclude(id__in=list(excluded))
+        if has_dates:
+            return await self._list_with_dates(qs, filters, locale, rank_map)
+        return await self._list_without_dates(qs, filters, locale, rank_map)
 
-            requested_nights = (at - af).days
-            qs = qs.filter(min_nights__lte=requested_nights)
-            qs = qs.filter(Q(max_nights__gte=requested_nights))
-
-            # A stay is only bookable if every night in the requested range is
-            # priced. Two disjoint priced ranges (e.g. 15-17 and 21-24) do not
-            # cover a 13-16 search, so such properties must not appear.
-            stay_nights = requested_nights
-            candidate_ids = await qs.values_list("id", flat=True)
-            stay_totals = await compute_stay_totals(list(candidate_ids), af, at)
-            qs = qs.filter(id__in=list(stay_totals.keys()))
-
+    async def _list_without_dates(
+        self,
+        qs,
+        filters: PropertyFilters,
+        locale: str,
+        rank_map: dict[str, float],
+    ) -> tuple[list[PropertyListItem], int]:
+        """No date range: sort and paginate at the DB level, count once."""
+        total = await qs.count()
+        qs = _apply_list_order(qs, filters.order_by)
         offset = (filters.page - 1) * filters.page_size
         qs = qs.offset(offset).limit(filters.page_size)
 
@@ -502,41 +594,86 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                 ),
             ),
         )
-
-        results: list[PropertyListItem] = []
-        for v in properties:
-            thumbnail = next(
-                (img.url for img in v.images if img.is_thumbnail),  # type: ignore[union-attr]
-                None,
-            )
-            tr = _resolve_translation(v.translations, locale)  # type: ignore[union-attr]
-            results.append(
-                PropertyListItem(
-                    stay_total=stay_totals.get(v.id),
-                    stay_nights=stay_nights,
-                    id=v.id,
-                    name=tr.name if tr else FALLBACK_NAME,
-                    description=tr.description if tr else "",
-                    region_code=v.region_code,
-                    settlement_ekatte=v.settlement_ekatte,
-                    city=resolve_city_name(v.settlement_ekatte, locale) or v.city,
-                    latitude=v.latitude,
-                    longitude=v.longitude,
-                    property_type=v.property_type,
-                    status=PropertyStatus(v.status),
-                    price_from=v.price_from,
-                    currency=v.currency,
-                    max_guests=v.max_guests,
-                    bedrooms=v.bedrooms,
-                    rooms=v.rooms,
-                    rating=v.rating,
-                    total_reviews=v.total_reviews,
-                    thumbnail=thumbnail,
-                )
-            )
-        if rank_map:
+        results = [_build_list_item(v, locale) for v in properties]
+        # ``recommended`` preserves the historical FTS-rank ordering of the page.
+        if filters.order_by == "recommended" and rank_map:
             results.sort(key=lambda p: rank_map.get(str(p.id), 0.0), reverse=True)
-        return results
+        return results, total
+
+    async def _list_with_dates(
+        self,
+        qs,
+        filters: PropertyFilters,
+        locale: str,
+        rank_map: dict[str, float],
+    ) -> tuple[list[PropertyListItem], int]:
+        """Date range: exclude unavailable stays, price the calendar, then filter
+        and sort on the resolved per-stay rate before paginating."""
+        af = filters.available_from
+        at = filters.available_to
+        assert af is not None and at is not None  # guaranteed by caller
+
+        # Overlap: unavail.start < checkOut AND unavail.end > checkIn
+        unavailable_ids = await PropertyUnavailability.filter(
+            start_date__lt=at,
+            end_date__gt=af,
+        ).values_list("property_id", flat=True)
+        booked_ids = await _get_booked_property_ids(af, at)
+        excluded = set(map(str, unavailable_ids)) | {str(bid) for bid in booked_ids}
+        if excluded:
+            qs = qs.exclude(id__in=list(excluded))
+
+        nights = (at - af).days
+        qs = qs.filter(min_nights__lte=nights, max_nights__gte=nights)
+
+        # A stay is only bookable if every night is priced; ``compute_stay_totals``
+        # omits any property with an unpriced night in the range, so partially
+        # priced properties are never resurrected by the price filter below.
+        candidate_ids = list(await qs.values_list("id", flat=True))
+        stay_totals = await compute_stay_totals(candidate_ids, af, at)
+
+        # Filter on the resolved average nightly rate, preserving candidate order.
+        avg_by_id: dict[UUID, Decimal] = {}
+        surviving: list[UUID] = []
+        for pid in candidate_ids:
+            stay_sum = stay_totals.get(pid)
+            if stay_sum is None:
+                continue
+            avg = stay_sum / nights
+            if filters.min_price is not None and avg < filters.min_price:
+                continue
+            if filters.max_price is not None and avg > filters.max_price:
+                continue
+            avg_by_id[pid] = avg
+            surviving.append(pid)
+
+        ordered = await _order_dated_ids(
+            surviving, filters.order_by, avg_by_id, rank_map
+        )
+        total = len(ordered)
+        offset = (filters.page - 1) * filters.page_size
+        page_ids = ordered[offset : offset + filters.page_size]
+        if not page_ids:
+            return [], total
+
+        props = await Property.filter(id__in=page_ids).prefetch_related(
+            "images",
+            Prefetch(
+                "translations",
+                queryset=PropertyTranslation.all().only(
+                    "id", "property_id", "locale", "name", "description", "address"
+                ),
+            ),
+        )
+        by_id = {p.id: p for p in props}
+        results = [
+            _build_list_item(
+                by_id[pid], locale, stay_total=stay_totals[pid], stay_nights=nights
+            )
+            for pid in page_ids
+            if pid in by_id
+        ]
+        return results, total
 
 
 property_crud = PropertyCRUD(Property, PropertyResponse)

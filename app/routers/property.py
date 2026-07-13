@@ -1,5 +1,4 @@
 import asyncio
-from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -69,8 +68,10 @@ async def _validate_payment_config(
             detail="Bank transfer payments require a bank account to be configured.",
         )
 
-    if not can_card and not can_bank and (
-        config.deposit_pct != 100 or config.remaining_method is not None
+    if (
+        not can_card
+        and not can_bank
+        and (config.deposit_pct != 100 or config.remaining_method is not None)
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -82,11 +83,6 @@ async def _validate_payment_config(
         )
 
 
-@router.get("/items/")
-async def read_items(filter_query: Annotated[PropertyFilters, Query()]):
-    return filter_query
-
-
 @router.get("/")
 @limiter.limit("60/minute")
 async def list_properties(
@@ -95,7 +91,10 @@ async def list_properties(
     filters: PropertyFilters = Query(),
 ) -> list[PropertyListItem]:
     response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
-    return await property_crud.list_properties(filters, locale=filters.lang)
+    items, total = await property_crud.list_properties(filters, locale=filters.lang)
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["Access-Control-Expose-Headers"] = "X-Total-Count"
+    return items
 
 
 @router.post("/", response_model=PropertyResponse, status_code=status.HTTP_201_CREATED)
@@ -142,8 +141,13 @@ async def get_properties_bulk(
     response_model=PropertyResponse,
 )
 @limiter.limit("60/minute")
-async def get_property(request: Request, property_id: UUID, response: Response):
-    property = await property_crud.get_property(property_id)
+async def get_property(
+    request: Request,
+    property_id: UUID,
+    response: Response,
+    lang: str = Query(DEFAULT_LOCALE, max_length=5),
+):
+    property = await property_crud.get_property(property_id, locale=lang)
     if not property:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Property not found"
