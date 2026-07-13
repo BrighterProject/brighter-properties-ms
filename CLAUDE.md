@@ -94,7 +94,8 @@ Editing (both map to per-date rows):
 - `DELETE /pricing/dates?start_date=&end_date=` — clear the inclusive range; those nights become unpriced/unavailable.
 Resolution: `GET /pricing/resolve?start_date=&end_date=` returns the per-night breakdown (source `date`), or **409** with `unpriced_dates` when any night is unpriced. Contract unchanged, so bookings-ms needs no change.
 Coverage: `GET /pricing/coverage?start=&end=` returns `unpriced_windows` (`[start_date, end_date)`, end-exclusive) — used by the frontend date picker to disable unbookable days (`app/services/coverage.py`). `GET /properties/{id}/unavailabilities` returns **real owner blocks only**.
-Tested in `tests/test_pricing_router.py`, `tests/test_price_resolver.py`, `tests/test_coverage.py`, `tests/test_pricing_cache.py`.
+Search: `GET /properties/?available_from=&available_to=` (`PropertyCRUD.list_properties`, `app/crud.py`) excludes properties with an overlapping owner `PropertyUnavailability` row or a confirmed booking, **and** requires every night in the requested range to be priced — it calls `compute_stay_totals()` on the candidate ids before pagination and drops any property omitted from that result (a stay with even one unpriced night, e.g. two disjoint priced ranges that don't fully cover the search, is excluded). There is no synthesized "price-gap" `PropertyUnavailability` row; unpriced-night exclusion happens only via this `compute_stay_totals()` check in search and the 409 in `GET /pricing/resolve` at booking time.
+Tested in `tests/test_pricing_router.py`, `tests/test_price_resolver.py`, `tests/test_coverage.py`, `tests/test_pricing_cache.py`, `tests/test_search_pricing_coverage.py`.
 
 ## ms-core
 

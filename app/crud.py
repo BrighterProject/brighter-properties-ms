@@ -463,6 +463,8 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             # Public browse: hide properties with no bookable (priced) days.
             qs = qs.filter(has_valid_pricing=True)
 
+        stay_nights: int | None = None
+        stay_totals: dict = {}
         if filters.available_from is not None and filters.available_to is not None:
             af = filters.available_from
             at = filters.available_to
@@ -480,6 +482,14 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             qs = qs.filter(min_nights__lte=requested_nights)
             qs = qs.filter(Q(max_nights__gte=requested_nights))
 
+            # A stay is only bookable if every night in the requested range is
+            # priced. Two disjoint priced ranges (e.g. 15-17 and 21-24) do not
+            # cover a 13-16 search, so such properties must not appear.
+            stay_nights = requested_nights
+            candidate_ids = await qs.values_list("id", flat=True)
+            stay_totals = await compute_stay_totals(list(candidate_ids), af, at)
+            qs = qs.filter(id__in=list(stay_totals.keys()))
+
         offset = (filters.page - 1) * filters.page_size
         qs = qs.offset(offset).limit(filters.page_size)
 
@@ -492,18 +502,6 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                 ),
             ),
         )
-
-        # When the search carries a date range, price each property's full stay
-        # so the frontend can show a total instead of a per-night "from" price.
-        stay_nights: int | None = None
-        stay_totals: dict = {}
-        if filters.available_from is not None and filters.available_to is not None:
-            stay_nights = (filters.available_to - filters.available_from).days
-            stay_totals = await compute_stay_totals(
-                [v.id for v in properties],
-                filters.available_from,
-                filters.available_to,
-            )
 
         results: list[PropertyListItem] = []
         for v in properties:
