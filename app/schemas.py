@@ -532,6 +532,14 @@ class PropertyFilters(BaseModel):
     available_from: date | None = None  # inclusive check-in date (YYYY-MM-DD)
     available_to: date | None = None  # exclusive check-out date (YYYY-MM-DD)
 
+    # Result ordering. ``recommended`` keeps the default order (FTS rank when a
+    # ``q`` search term is present); ``price_*`` sorts on the effective price
+    # (the resolved stay rate when dates are set, else ``price_from``, NULLs
+    # last); ``rating_desc`` sorts highest-rated first.
+    order_by: Literal["recommended", "price_asc", "price_desc", "rating_desc"] = (
+        "recommended"
+    )
+
     # Pagination
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=20, ge=1, le=100)

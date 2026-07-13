@@ -1,5 +1,4 @@
 import asyncio
-from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -69,8 +68,10 @@ async def _validate_payment_config(
             detail="Bank transfer payments require a bank account to be configured.",
         )
 
-    if not can_card and not can_bank and (
-        config.deposit_pct != 100 or config.remaining_method is not None
+    if (
+        not can_card
+        and not can_bank
+        and (config.deposit_pct != 100 or config.remaining_method is not None)
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -82,11 +83,6 @@ async def _validate_payment_config(
         )
 
 
-@router.get("/items/")
-async def read_items(filter_query: Annotated[PropertyFilters, Query()]):
-    return filter_query
-
-
 @router.get("/")
 @limiter.limit("60/minute")
 async def list_properties(
@@ -95,7 +91,10 @@ async def list_properties(
     filters: PropertyFilters = Query(),
 ) -> list[PropertyListItem]:
     response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
-    return await property_crud.list_properties(filters, locale=filters.lang)
+    items, total = await property_crud.list_properties(filters, locale=filters.lang)
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["Access-Control-Expose-Headers"] = "X-Total-Count"
+    return items
 
 
 @router.post("/", response_model=PropertyResponse, status_code=status.HTTP_201_CREATED)

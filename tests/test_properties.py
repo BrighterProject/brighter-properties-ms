@@ -21,21 +21,34 @@ from .factories import (
 class TestListProperties:
     def test_returns_200(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
-            mock_crud.list_properties = AsyncMock(return_value=[property_list_item()])
+            mock_crud.list_properties = AsyncMock(
+                return_value=([property_list_item()], 1)
+            )
             resp = client_factory(make_user()).get("/properties")
         assert resp.status_code == 200
         assert isinstance(resp.json(), list)
 
+    def test_total_count_header(self, client_factory):
+        with patch("app.routers.property.property_crud") as mock_crud:
+            mock_crud.list_properties = AsyncMock(
+                return_value=([property_list_item()], 42)
+            )
+            resp = client_factory(make_user()).get("/properties")
+        assert resp.status_code == 200
+        assert resp.headers["X-Total-Count"] == "42"
+        assert "X-Total-Count" in resp.headers["Access-Control-Expose-Headers"]
+
     def test_empty_list(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
-            mock_crud.list_properties = AsyncMock(return_value=[])
+            mock_crud.list_properties = AsyncMock(return_value=([], 0))
             resp = client_factory(make_user()).get("/properties")
         assert resp.status_code == 200
         assert resp.json() == []
+        assert resp.headers["X-Total-Count"] == "0"
 
     def test_lang_param_forwarded(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
-            mock_crud.list_properties = AsyncMock(return_value=[])
+            mock_crud.list_properties = AsyncMock(return_value=([], 0))
             resp = client_factory(make_user()).get("/properties", params={"lang": "bg"})
         assert resp.status_code == 200
         _, kwargs = mock_crud.list_properties.call_args
@@ -43,7 +56,7 @@ class TestListProperties:
 
     def test_filters_forwarded(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
-            mock_crud.list_properties = AsyncMock(return_value=[])
+            mock_crud.list_properties = AsyncMock(return_value=([], 0))
             resp = client_factory(make_user()).get(
                 "/properties",
                 params={"city": "Sofia", "has_parking": True, "page": 2},
@@ -56,7 +69,7 @@ class TestListProperties:
 
     def test_availability_dates_forwarded(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
-            mock_crud.list_properties = AsyncMock(return_value=[])
+            mock_crud.list_properties = AsyncMock(return_value=([], 0))
             resp = client_factory(make_user()).get(
                 "/properties",
                 params={"available_from": "2026-07-01", "available_to": "2026-07-05"},
