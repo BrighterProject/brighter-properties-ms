@@ -153,6 +153,20 @@ async def _order_dated_ids(
     return surviving
 
 
+def _resolve_detail_city(
+    resp: PropertyResponse, settlement_ekatte: str | None, locale: str
+) -> PropertyResponse:
+    """Return ``resp`` with ``city`` resolved from the settlement.
+
+    Mirrors ``_build_list_item``: the settlement name in the requested locale
+    wins, falling back to the legacy free-text ``city`` when the settlement is
+    absent or unknown. Returns a copy — the input is left untouched.
+    """
+    return resp.model_copy(
+        update={"city": resolve_city_name(settlement_ekatte, locale) or resp.city}
+    )
+
+
 def _build_list_item(
     v,
     locale: str,
@@ -435,16 +449,25 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
     async def count_by_owner(self, owner_id: UUID) -> int:
         return await Property.filter(owner_id=owner_id).count()
 
-    async def get_property(self, property_id: UUID) -> PropertyResponse | None:
+    async def get_property(
+        self, property_id: UUID, locale: str = settings.DEFAULT_LOCALE
+    ) -> PropertyResponse | None:
         inst = await Property.get_or_none(id=property_id).prefetch_related(*PREFETCH)
 
         if not inst:
             return None
 
-        return PropertyResponse.model_validate(inst, from_attributes=True)
+        return _resolve_detail_city(
+            PropertyResponse.model_validate(inst, from_attributes=True),
+            inst.settlement_ekatte,
+            locale,
+        )
 
     async def get_property_for_owner(
-        self, property_id: UUID, owner_id: UUID
+        self,
+        property_id: UUID,
+        owner_id: UUID,
+        locale: str = settings.DEFAULT_LOCALE,
     ) -> PropertyResponse | None:
         try:
             inst = await Property.get(
@@ -452,7 +475,11 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             ).prefetch_related(*PREFETCH)
         except DoesNotExist:
             return None
-        return PropertyResponse.model_validate(inst, from_attributes=True)
+        return _resolve_detail_city(
+            PropertyResponse.model_validate(inst, from_attributes=True),
+            inst.settlement_ekatte,
+            locale,
+        )
 
     async def get_properties_by_ids(
         self, ids: list[UUID], locale: str = settings.DEFAULT_LOCALE

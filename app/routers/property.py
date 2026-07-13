@@ -141,8 +141,13 @@ async def get_properties_bulk(
     response_model=PropertyResponse,
 )
 @limiter.limit("60/minute")
-async def get_property(request: Request, property_id: UUID, response: Response):
-    property = await property_crud.get_property(property_id)
+async def get_property(
+    request: Request,
+    property_id: UUID,
+    response: Response,
+    lang: str = Query(DEFAULT_LOCALE, max_length=5),
+):
+    property = await property_crud.get_property(property_id, locale=lang)
     if not property:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Property not found"
