@@ -110,8 +110,18 @@ New router files placed in `app/routers/` are picked up automatically by `setup_
 
 **Supported locales**: `en`, `bg`, `ru` (defined in `models.SUPPORTED_LOCALES`)
 
-**AmenityType** enum (stored as JSON list on Property):
-`wifi` | `air_conditioning` | `kitchen` | `washing_machine` | `fireplace` | `bbq` | `mountain_view` | `ski_storage` | `breakfast_included` | `reception_24h` | `sea_view` | `balcony` | `pool` | `garden` | `pet_friendly` | `coffee_machine`
+**AmenityType** enum (stored as JSON list on Property) — flat taxonomy (BTR-53);
+category grouping for the filter UI lives in the frontends, the enum only
+validates values. Additive only: never rename/remove a value (stored JSON).
+Grouped by category:
+- Views & location: `sea_view` | `mountain_view` | `lake_view` | `beachfront` | `ski_to_door` | `city_center`
+- Kitchen & dining: `kitchen` | `kitchenette` | `coffee_machine` | `dishwasher` | `microwave` | `oven` | `restaurant`
+- Comfort: `wifi` | `air_conditioning` | `heating` | `fireplace` | `washing_machine` | `dryer` | `iron` | `tv` | `workspace`
+- Outdoors: `pool` | `indoor_pool` | `garden` | `bbq` | `balcony` | `terrace` | `hot_tub`
+- Family: `pet_friendly` | `crib` | `high_chair` | `playground` | `board_games`
+- Wellness: `sauna` | `spa` | `gym` | `massage`
+- Services: `reception_24h` | `breakfast_included` | `airport_shuttle` | `ev_charger` | `luggage_storage` | `daily_housekeeping` | `ski_storage`
+- Safety & accessibility: `smoke_alarm` | `fire_extinguisher` | `first_aid_kit` | `elevator` | `ground_floor` | `step_free_access`
 
 ## i18n — PropertyTranslation
 
