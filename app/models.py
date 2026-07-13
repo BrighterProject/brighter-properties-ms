@@ -136,7 +136,11 @@ class Property(Model):
     settlement_ekatte = fields.CharField(
         max_length=10, null=True
     )  # EKATTE code e.g. "68134"
-    city = fields.CharField(max_length=100, null=True)  # legacy; kept for old data
+    # DEPRECATED as input: never set on new properties (located via
+    # settlement_ekatte). Kept only as a fallback for pre-EKATTE rows. Read
+    # schemas expose ``city`` as the settlement name resolved from
+    # settlement_ekatte (see crud.py), falling back to this column.
+    city = fields.CharField(max_length=100, null=True)
     latitude = fields.DecimalField(max_digits=9, decimal_places=6, null=True)
     longitude = fields.DecimalField(max_digits=9, decimal_places=6, null=True)
 
