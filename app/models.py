@@ -30,22 +30,79 @@ class CancellationPolicy(StrEnum):
 
 
 class AmenityType(StrEnum):
+    """Flat amenity taxonomy (BTR-53).
+
+    The enum only validates values; category grouping for the filter UI lives
+    in the frontends. Values are additive — never rename or remove an existing
+    one, since amenities are stored as a JSON list on ``Property``.
+    """
+
+    # Views & location
+    SEA_VIEW = "sea_view"
+    MOUNTAIN_VIEW = "mountain_view"
+    LAKE_VIEW = "lake_view"
+    BEACHFRONT = "beachfront"
+    SKI_TO_DOOR = "ski_to_door"
+    CITY_CENTER = "city_center"
+
+    # Kitchen & dining
+    KITCHEN = "kitchen"
+    KITCHENETTE = "kitchenette"
+    COFFEE_MACHINE = "coffee_machine"
+    DISHWASHER = "dishwasher"
+    MICROWAVE = "microwave"
+    OVEN = "oven"
+    RESTAURANT = "restaurant"
+
+    # Comfort
     WIFI = "wifi"
     AIR_CONDITIONING = "air_conditioning"
-    KITCHEN = "kitchen"
-    WASHING_MACHINE = "washing_machine"
+    HEATING = "heating"
     FIREPLACE = "fireplace"
-    BBQ = "bbq"
-    MOUNTAIN_VIEW = "mountain_view"
-    SKI_STORAGE = "ski_storage"
-    BREAKFAST_INCLUDED = "breakfast_included"
-    RECEPTION_24H = "reception_24h"
-    SEA_VIEW = "sea_view"
-    BALCONY = "balcony"
+    WASHING_MACHINE = "washing_machine"
+    DRYER = "dryer"
+    IRON = "iron"
+    TV = "tv"
+    WORKSPACE = "workspace"
+
+    # Outdoors
     POOL = "pool"
+    INDOOR_POOL = "indoor_pool"
     GARDEN = "garden"
+    BBQ = "bbq"
+    BALCONY = "balcony"
+    TERRACE = "terrace"
+    HOT_TUB = "hot_tub"
+
+    # Family
     PET_FRIENDLY = "pet_friendly"
-    COFFEE_MACHINE = "coffee_machine"
+    CRIB = "crib"
+    HIGH_CHAIR = "high_chair"
+    PLAYGROUND = "playground"
+    BOARD_GAMES = "board_games"
+
+    # Wellness
+    SAUNA = "sauna"
+    SPA = "spa"
+    GYM = "gym"
+    MASSAGE = "massage"
+
+    # Services
+    RECEPTION_24H = "reception_24h"
+    BREAKFAST_INCLUDED = "breakfast_included"
+    AIRPORT_SHUTTLE = "airport_shuttle"
+    EV_CHARGER = "ev_charger"
+    LUGGAGE_STORAGE = "luggage_storage"
+    DAILY_HOUSEKEEPING = "daily_housekeeping"
+    SKI_STORAGE = "ski_storage"
+
+    # Safety & accessibility
+    SMOKE_ALARM = "smoke_alarm"
+    FIRE_EXTINGUISHER = "fire_extinguisher"
+    FIRST_AID_KIT = "first_aid_kit"
+    ELEVATOR = "elevator"
+    GROUND_FLOOR = "ground_floor"
+    STEP_FREE_ACCESS = "step_free_access"
 
 
 SUPPORTED_LOCALES = ("en", "bg", "ru")
