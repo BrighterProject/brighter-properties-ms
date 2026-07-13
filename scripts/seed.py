@@ -26,8 +26,18 @@ MODELS = ["app.models"]
 # Fixed seed owner UUID — a placeholder owner for fixture properties.
 SEED_OWNER_ID = uuid.UUID("b42ebeec-727b-47a1-aec9-93e214ecf837")
 
-# Shared tourism registry number for all seeded apartments.
-SEED_APARTMENT_REGISTRATION_NUMBER = "АПТ-2024-00123"
+# Tourism registry number prefixes per property type (real ones are issued by
+# the Bulgarian tourism registry; these are seed-only placeholders).
+_REGISTRATION_PREFIXES = {
+    "apartment": "АПТ",
+    "house": "КЪЩ",
+    "villa": "ВИЛ",
+    "hotel": "ХОТ",
+    "hostel": "ХСТ",
+    "guesthouse": "КЗГ",
+    "room": "СТА",
+    "other": "ДРУ",
+}
 
 # Default payment config for seeded properties: cash on arrival, no online deposit.
 SEED_PAYMENT_CONFIG = {
@@ -39,7 +49,6 @@ SEED_PAYMENT_CONFIG = {
 FIXTURES = [
     {
         "property_type": "apartment",
-        "registration_number": "АПТ-2024-00123",
         "city": "Sofia",
         "region_code": "SOF",
         "settlement_ekatte": "68134",
@@ -110,7 +119,6 @@ FIXTURES = [
     },
     {
         "property_type": "villa",
-        "registration_number": "АПТ-2024-00123",
         "city": "Bansko",
         "region_code": "BLG",
         "settlement_ekatte": "02676",
@@ -187,7 +195,6 @@ FIXTURES = [
     },
     {
         "property_type": "hotel",
-        "registration_number": "АПТ-2024-00123",
         "city": "Plovdiv",
         "region_code": "PDV",
         "settlement_ekatte": "56784",
@@ -252,7 +259,6 @@ FIXTURES = [
     },
     {
         "property_type": "apartment",
-        "registration_number": "АПТ-2024-00123",
         "city": "Varna",
         "region_code": "VAR",
         "settlement_ekatte": "10135",
@@ -330,7 +336,6 @@ FIXTURES = [
     },
     {
         "property_type": "house",
-        "registration_number": "АПТ-2024-00123",
         "city": "Plovdiv",
         "region_code": "PDV",
         "settlement_ekatte": "56784",
@@ -402,7 +407,6 @@ FIXTURES = [
     },
     {
         "property_type": "apartment",
-        "registration_number": "АПТ-2024-00123",
         "city": "Sofia",
         "region_code": "SOF",
         "settlement_ekatte": "68134",
@@ -689,9 +693,9 @@ def _make_sea_fixture(index: int) -> dict:
 SEA_FIXTURES = [_make_sea_fixture(i) for i in range(len(_SEA_TOWNS))]
 FIXTURES.extend(SEA_FIXTURES)
 
-for _fixture in FIXTURES:
-    if _fixture["property_type"] == "apartment":
-        _fixture["registration_number"] = SEED_APARTMENT_REGISTRATION_NUMBER
+for _index, _fixture in enumerate(FIXTURES, start=1):
+    _prefix = _REGISTRATION_PREFIXES[_fixture["property_type"]]
+    _fixture["registration_number"] = f"{_prefix}-2024-{_index:05d}"
     _fixture.setdefault("payment_config", dict(SEED_PAYMENT_CONFIG))
 
 
