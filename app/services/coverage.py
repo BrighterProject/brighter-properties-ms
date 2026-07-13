@@ -1,7 +1,6 @@
 """Pricing coverage — the day-ranges a property has no price set for.
 
-A day is priced iff its weekday has a ``PropertyWeekdayPrice`` or a
-``PropertyDatePriceOverride`` covers it (override wins). Days with neither are
+A day is priced iff it has a ``PropertyDatePrice`` row. Days without one are
 "unpriced" and therefore unbookable.
 
 This is a first-class, queryable concept — distinct from real owner-set
@@ -22,8 +21,7 @@ from app.schemas import UnpricedWindow
 
 
 def compute_unpriced_windows(
-    weekday_rules: list[Any],
-    date_overrides: list[Any],
+    date_prices: list[Any],
     *,
     start: date,
     end: date,
@@ -31,8 +29,7 @@ def compute_unpriced_windows(
     """Return the unpriced day-windows within ``[start, end)`` (end-exclusive).
 
     Args:
-        weekday_rules: The property's ``PropertyWeekdayPrice`` rows.
-        date_overrides: The property's ``PropertyDatePriceOverride`` rows.
+        date_prices: The property's ``PropertyDatePrice`` rows.
         start: First day to consider (inclusive).
         end: Day after the last day to consider (exclusive).
 
@@ -40,18 +37,13 @@ def compute_unpriced_windows(
         One window per contiguous run of unpriced days; empty when every day is
         priced.
     """
-    priced_weekdays = {w.weekday for w in weekday_rules}
-
-    def is_priced(day: date) -> bool:
-        if day.weekday() in priced_weekdays:
-            return True
-        return any(o.start_date <= day <= o.end_date for o in date_overrides)
+    priced_days = {p.date for p in date_prices}
 
     windows: list[UnpricedWindow] = []
     gap_start: date | None = None
     day = start
     while day < end:
-        if is_priced(day):
+        if day in priced_days:
             if gap_start is not None:
                 windows.append(UnpricedWindow(start_date=gap_start, end_date=day))
                 gap_start = None
@@ -82,18 +74,15 @@ async def unpriced_windows(
     Returns:
         The unpriced windows within the resolved ``[start, end)`` range.
     """
-    from app.models import PropertyDatePriceOverride, PropertyWeekdayPrice
+    from app.models import PropertyDatePrice
 
     anchor = today or date.today()
     start = start or anchor
     end = end or (anchor + timedelta(days=settings.booking_window_days))
 
-    weekday_rules = await PropertyWeekdayPrice.filter(property_id=property_id)
-    date_overrides = await PropertyDatePriceOverride.filter(
+    date_prices = await PropertyDatePrice.filter(
         property_id=property_id,
-        start_date__lte=end,
-        end_date__gte=start,
+        date__gte=start,
+        date__lt=end,
     )
-    return compute_unpriced_windows(
-        weekday_rules, date_overrides, start=start, end=end
-    )
+    return compute_unpriced_windows(date_prices, start=start, end=end)

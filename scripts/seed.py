@@ -566,7 +566,12 @@ def _sea_images(pair_index: int) -> list[dict]:
 # (oblast_code, ekatte, bg_address, en_address) — ekatte/oblast verified against
 # processing/final_merged_settlements.json (the same registry app/regions.py reads).
 _SEA_TOWNS = [
-    ("VAR", "10135", "к.к. Св. Св. Константин и Елена", "St. Constantine and Helena Resort"),
+    (
+        "VAR",
+        "10135",
+        "к.к. Св. Св. Константин и Елена",
+        "St. Constantine and Helena Resort",
+    ),
     ("BGS", "07079", "ул. Александровска 45", "45 Alexandrovska St"),
     ("BGS", "67800", "ул. Аполония 12, Стар град", "12 Apolonia St, Old Town"),
     ("BGS", "51500", "ул. Митрополитска 8, Стар град", "8 Mitropolitska St, Old Town"),
@@ -591,13 +596,104 @@ _SEA_TOWNS = [
 # (property_type, bedrooms, bathrooms, max_guests, base_price, cancellation_policy,
 #  has_parking, extra_amenities, doubles, singles, sofa_bed, studio)
 _SEA_ARCHETYPES = [
-    ("apartment", 2, 1, 4, Decimal("95.00"), "moderate", True, ["balcony", "pool"], 2, 0, False, False),
-    ("house", 3, 2, 6, Decimal("140.00"), "moderate", True, ["garden", "bbq"], 2, 2, False, False),
-    ("apartment", 1, 1, 2, Decimal("60.00"), "free", False, ["balcony"], 0, 0, False, True),
-    ("hotel", 1, 1, 2, Decimal("75.00"), "free", True, ["breakfast_included", "reception_24h"], 1, 0, False, False),
-    ("villa", 4, 3, 8, Decimal("260.00"), "strict", True, ["pool", "bbq", "garden"], 3, 2, False, False),
-    ("guesthouse", 2, 1, 5, Decimal("80.00"), "moderate", True, ["breakfast_included"], 1, 1, True, False),
-    ("apartment", 3, 2, 6, Decimal("120.00"), "moderate", True, ["pool", "balcony"], 2, 2, False, False),
+    (
+        "apartment",
+        2,
+        1,
+        4,
+        Decimal("95.00"),
+        "moderate",
+        True,
+        ["balcony", "pool"],
+        2,
+        0,
+        False,
+        False,
+    ),
+    (
+        "house",
+        3,
+        2,
+        6,
+        Decimal("140.00"),
+        "moderate",
+        True,
+        ["garden", "bbq"],
+        2,
+        2,
+        False,
+        False,
+    ),
+    (
+        "apartment",
+        1,
+        1,
+        2,
+        Decimal("60.00"),
+        "free",
+        False,
+        ["balcony"],
+        0,
+        0,
+        False,
+        True,
+    ),
+    (
+        "hotel",
+        1,
+        1,
+        2,
+        Decimal("75.00"),
+        "free",
+        True,
+        ["breakfast_included", "reception_24h"],
+        1,
+        0,
+        False,
+        False,
+    ),
+    (
+        "villa",
+        4,
+        3,
+        8,
+        Decimal("260.00"),
+        "strict",
+        True,
+        ["pool", "bbq", "garden"],
+        3,
+        2,
+        False,
+        False,
+    ),
+    (
+        "guesthouse",
+        2,
+        1,
+        5,
+        Decimal("80.00"),
+        "moderate",
+        True,
+        ["breakfast_included"],
+        1,
+        1,
+        True,
+        False,
+    ),
+    (
+        "apartment",
+        3,
+        2,
+        6,
+        Decimal("120.00"),
+        "moderate",
+        True,
+        ["pool", "balcony"],
+        2,
+        2,
+        False,
+        False,
+    ),
     ("hostel", 1, 1, 2, Decimal("45.00"), "free", False, [], 1, 0, False, True),
 ]
 
@@ -698,13 +794,16 @@ for _fixture in FIXTURES:
 async def seed(force: bool = False) -> None:
     await Tortoise.init(db_url=DB_URL, modules={"models": MODELS})
 
+    from datetime import date, timedelta
+
     from app.models import (
         Property,
+        PropertyDatePrice,
         PropertyImage,
         PropertyTranslation,
-        PropertyWeekdayPrice,
     )
     from app.services.pricing_cache import sync_pricing_cache
+    from app.settings import booking_window_days
 
     existing = await Property.filter(status="active").count()
     if existing > 0 and not force:
@@ -722,8 +821,9 @@ async def seed(force: bool = False) -> None:
     for fixture in FIXTURES:
         translations = fixture.pop("translations")
         images = fixture.pop("images")
-        # Price is no longer a stored field — seed a flat weekday rate and let
-        # the pricing cache derive price_from / has_valid_pricing.
+        # Price is no longer a stored field — seed one per-date row per night
+        # across the booking horizon and let the pricing cache derive
+        # price_from / has_valid_pricing.
         seed_price = fixture.pop("price_per_night")
 
         prop = await Property.create(
@@ -739,10 +839,18 @@ async def seed(force: bool = False) -> None:
         for img in images:
             await PropertyImage.create(id=uuid.uuid4(), property=prop, **img)
 
-        for weekday in range(7):
-            await PropertyWeekdayPrice.create(
-                id=uuid.uuid4(), property=prop, weekday=weekday, price=seed_price
-            )
+        today = date.today()
+        await PropertyDatePrice.bulk_create(
+            [
+                PropertyDatePrice(
+                    id=uuid.uuid4(),
+                    property=prop,
+                    date=today + timedelta(days=offset),
+                    price=seed_price,
+                )
+                for offset in range(booking_window_days)
+            ]
+        )
         await sync_pricing_cache(prop.id)
 
         print(f"[seed] Created: {prop.city} — {translations[0]['name']}")

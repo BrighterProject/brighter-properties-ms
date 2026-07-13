@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from functools import lru_cache
 from uuid import UUID
 
@@ -21,16 +21,14 @@ from app.services.price_resolver import compute_stay_totals
 
 from .models import (
     Property,
-    PropertyDatePriceOverride,
+    PropertyDatePrice,
     PropertyImage,
     PropertyTranslation,
     PropertyUnavailability,
-    PropertyWeekdayPrice,
 )
 from .schemas import (
-    DatePriceOverrideIn,
-    DatePriceOverrideOut,
-    DatePriceOverrideUpdate,
+    DatePriceOut,
+    DateRangePriceIn,
     PropertyCreate,
     PropertyFilters,
     PropertyImageCreate,
@@ -47,8 +45,6 @@ from .schemas import (
     TranslationCreate,
     TranslationResponse,
     TranslationUpdate,
-    WeekdayPriceIn,
-    WeekdayPriceOut,
 )
 
 FALLBACK_NAME = "Untitled"
@@ -287,8 +283,7 @@ PREFETCH = (
     "images",
     "unavailabilities",
     "translations",
-    "weekday_prices",
-    "date_price_overrides",
+    "date_prices",
 )
 
 
@@ -468,6 +463,8 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             # Public browse: hide properties with no bookable (priced) days.
             qs = qs.filter(has_valid_pricing=True)
 
+        stay_nights: int | None = None
+        stay_totals: dict = {}
         if filters.available_from is not None and filters.available_to is not None:
             af = filters.available_from
             at = filters.available_to
@@ -485,6 +482,14 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             qs = qs.filter(min_nights__lte=requested_nights)
             qs = qs.filter(Q(max_nights__gte=requested_nights))
 
+            # A stay is only bookable if every night in the requested range is
+            # priced. Two disjoint priced ranges (e.g. 15-17 and 21-24) do not
+            # cover a 13-16 search, so such properties must not appear.
+            stay_nights = requested_nights
+            candidate_ids = await qs.values_list("id", flat=True)
+            stay_totals = await compute_stay_totals(list(candidate_ids), af, at)
+            qs = qs.filter(id__in=list(stay_totals.keys()))
+
         offset = (filters.page - 1) * filters.page_size
         qs = qs.offset(offset).limit(filters.page_size)
 
@@ -497,18 +502,6 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
                 ),
             ),
         )
-
-        # When the search carries a date range, price each property's full stay
-        # so the frontend can show a total instead of a per-night "from" price.
-        stay_nights: int | None = None
-        stay_totals: dict = {}
-        if filters.available_from is not None and filters.available_to is not None:
-            stay_nights = (filters.available_to - filters.available_from).days
-            stay_totals = await compute_stay_totals(
-                [v.id for v in properties],
-                filters.available_from,
-                filters.available_to,
-            )
 
         results: list[PropertyListItem] = []
         for v in properties:
@@ -557,85 +550,87 @@ property_translation_crud = PropertyTranslationCRUD(
 
 
 # ---------------------------------------------------------------------------
-# Weekday pricing CRUD
+# Per-date pricing CRUD
 # ---------------------------------------------------------------------------
 
 
-class WeekdayPriceCRUD(CRUD[PropertyWeekdayPrice, WeekdayPriceOut]):  # type: ignore
-    async def list_for_property(self, property_id: UUID) -> list[WeekdayPriceOut]:
-        items = await PropertyWeekdayPrice.filter(property_id=property_id).order_by(
-            "weekday"
-        )
-        return [WeekdayPriceOut.model_validate(i, from_attributes=True) for i in items]
-
-    async def upsert_all(
-        self, property_id: UUID, rules: list[WeekdayPriceIn]
-    ) -> list[WeekdayPriceOut]:
-        """Atomically replace all weekday prices for a property."""
-        await PropertyWeekdayPrice.filter(property_id=property_id).delete()
-        created = []
-        for rule in rules:
-            inst = await PropertyWeekdayPrice.create(
-                property_id=property_id,
-                weekday=rule.weekday,
-                price=rule.price,
-            )
-            created.append(inst)
-        created.sort(key=lambda x: x.weekday)
-        return [
-            WeekdayPriceOut.model_validate(i, from_attributes=True) for i in created
-        ]
-
-
-# ---------------------------------------------------------------------------
-# Date override CRUD
-# ---------------------------------------------------------------------------
-
-
-class DatePriceOverrideCRUD(CRUD[PropertyDatePriceOverride, DatePriceOverrideOut]):  # type: ignore
+class DatePriceCRUD(CRUD[PropertyDatePrice, DatePriceOut]):  # type: ignore
     async def list_for_property(
         self,
         property_id: UUID,
         from_date: date | None = None,
         to_date: date | None = None,
-    ) -> list[DatePriceOverrideOut]:
-        qs = PropertyDatePriceOverride.filter(property_id=property_id)
+    ) -> list[DatePriceOut]:
+        """List a property's priced nights, optionally within ``[from_date, to_date]``."""
+        qs = PropertyDatePrice.filter(property_id=property_id)
         if from_date:
-            qs = qs.filter(end_date__gte=from_date)
+            qs = qs.filter(date__gte=from_date)
         if to_date:
-            qs = qs.filter(start_date__lte=to_date)
-        items = await qs.order_by("start_date", "created_at")
-        return [
-            DatePriceOverrideOut.model_validate(i, from_attributes=True) for i in items
+            qs = qs.filter(date__lte=to_date)
+        items = await qs.order_by("date")
+        return [DatePriceOut.model_validate(i, from_attributes=True) for i in items]
+
+    async def upsert_range(
+        self, property_id: UUID, payload: DateRangePriceIn
+    ) -> list[DatePriceOut]:
+        """Set every night in ``[start_date, end_date]`` (inclusive) to ``price``.
+
+        Existing rows in the range are updated; missing ones are created — one
+        row per night. Returns the resulting rows ordered by date.
+        """
+        days = [
+            payload.start_date + timedelta(days=i)
+            for i in range((payload.end_date - payload.start_date).days + 1)
         ]
+        existing = {
+            row.date: row
+            for row in await PropertyDatePrice.filter(
+                property_id=property_id,
+                date__gte=payload.start_date,
+                date__lte=payload.end_date,
+            )
+        }
 
-    async def create_for_property(
-        self, property_id: UUID, payload: DatePriceOverrideIn
-    ) -> DatePriceOverrideOut:
-        inst = await PropertyDatePriceOverride.create(
-            property_id=property_id, **payload.model_dump()
+        to_update: list[PropertyDatePrice] = []
+        to_create: list[PropertyDatePrice] = []
+        for day in days:
+            row = existing.get(day)
+            if row is not None:
+                if row.price != payload.price:
+                    row.price = payload.price
+                    to_update.append(row)
+            else:
+                to_create.append(
+                    PropertyDatePrice(
+                        property_id=property_id, date=day, price=payload.price
+                    )
+                )
+
+        if to_update:
+            await PropertyDatePrice.bulk_update(to_update, fields=["price"])
+        if to_create:
+            await PropertyDatePrice.bulk_create(to_create)
+
+        return await self.list_for_property(
+            property_id, payload.start_date, payload.end_date
         )
-        return DatePriceOverrideOut.model_validate(inst, from_attributes=True)
 
-    async def update(
-        self, override_id: UUID, property_id: UUID, payload: DatePriceOverrideUpdate
-    ) -> DatePriceOverrideOut | None:
-        inst = await PropertyDatePriceOverride.get_or_none(
-            id=override_id, property_id=property_id
-        )
-        if not inst:
-            return None
-        await inst.update_from_dict(payload.model_dump(exclude_none=True)).save()
-        return DatePriceOverrideOut.model_validate(inst, from_attributes=True)
+    async def delete_range(
+        self, property_id: UUID, start_date: date, end_date: date
+    ) -> int:
+        """Delete every priced night in ``[start_date, end_date]`` (inclusive).
 
-    async def delete(self, override_id: UUID, property_id: UUID) -> bool:
-        return await self.delete_by(id=override_id, property_id=property_id)
+        Those dates become unpriced and therefore unavailable. Returns the number
+        of rows removed.
+        """
+        return await PropertyDatePrice.filter(
+            property_id=property_id,
+            date__gte=start_date,
+            date__lte=end_date,
+        ).delete()
 
 
-weekday_price_crud = WeekdayPriceCRUD(PropertyWeekdayPrice, WeekdayPriceOut)
-date_override_crud = DatePriceOverrideCRUD(
-    PropertyDatePriceOverride, DatePriceOverrideOut
-)
+date_price_crud = DatePriceCRUD(PropertyDatePrice, DatePriceOut)
 
 
 async def assert_owns_property(property_id: UUID, current_user: CurrentUser) -> None:

@@ -1,9 +1,9 @@
 """Tests for the denormalized pricing cache (price_from + has_valid_pricing).
 
 ``price_from`` and ``has_valid_pricing`` are system-owned projections of the
-pricing calendar, never owner input. The pure helpers are tested directly; the
-persisting ``sync_pricing_cache`` is tested with the model layer patched — no
-database required.
+per-date pricing calendar, never owner input. The pure helpers are tested
+directly; the persisting ``sync_pricing_cache`` is tested with the model layer
+patched — no database required.
 """
 
 import asyncio
@@ -20,17 +20,15 @@ from app.services.pricing_cache import (
     sync_pricing_cache,
 )
 
-
-def _weekday(price: str) -> SimpleNamespace:
-    return SimpleNamespace(price=Decimal(price))
-
-
-def _override(price: str, start: date, end: date) -> SimpleNamespace:
-    return SimpleNamespace(price=Decimal(price), start_date=start, end_date=end)
-
-
 TODAY = date(2026, 7, 11)
 HORIZON = 180
+
+
+def _price(price: str, offset: int, pid=None) -> SimpleNamespace:
+    """A per-date row ``offset`` days from TODAY."""
+    return SimpleNamespace(
+        price=Decimal(price), date=TODAY + timedelta(days=offset), property_id=pid
+    )
 
 
 class _AwaitableList:
@@ -52,38 +50,33 @@ class _AwaitableList:
 
 
 def test_price_from_none_when_no_pricing():
-    assert compute_price_from([], [], today=TODAY) is None
+    assert compute_price_from([], today=TODAY, horizon_days=HORIZON) is None
 
 
-def test_price_from_min_across_weekdays():
-    assert compute_price_from(
-        [_weekday("90"), _weekday("70")], [], today=TODAY
-    ) == Decimal("70")
+def test_price_from_min_across_horizon():
+    rows = [_price("90", 5), _price("70", 20)]
+    assert compute_price_from(rows, today=TODAY, horizon_days=HORIZON) == Decimal("70")
 
 
-def test_price_from_min_across_overrides():
-    d = TODAY + timedelta(days=20)
-    overrides = [_override("150", d, d), _override("60", d, d)]
-    assert compute_price_from([], overrides, today=TODAY) == Decimal("60")
+def test_price_from_excludes_past_nights():
+    # A cheap past night must not drag the public "from X" price down.
+    rows = [_price("10", -30), _price("90", 5)]
+    assert compute_price_from(rows, today=TODAY, horizon_days=HORIZON) == Decimal("90")
 
 
-def test_price_from_spans_both_sources():
-    d = TODAY + timedelta(days=20)
-    assert compute_price_from(
-        [_weekday("90")], [_override("45.50", d, d)], today=TODAY
-    ) == Decimal("45.50")
+def test_price_from_excludes_beyond_horizon():
+    rows = [_price("40", HORIZON + 10), _price("90", 5)]
+    assert compute_price_from(rows, today=TODAY, horizon_days=HORIZON) == Decimal("90")
 
 
-def test_price_from_excludes_expired_overrides():
-    # A cheap past special must not drag the public "from X" price down.
-    past = _override("10", TODAY - timedelta(days=90), TODAY - timedelta(days=60))
-    assert compute_price_from([_weekday("90")], [past], today=TODAY) == Decimal("90")
+def test_price_from_includes_night_today():
+    # Horizon is inclusive of today.
+    rows = [_price("40", 0), _price("90", 5)]
+    assert compute_price_from(rows, today=TODAY, horizon_days=HORIZON) == Decimal("40")
 
 
-def test_price_from_includes_override_ending_today():
-    # end_date is inclusive: an override whose last night is today still counts.
-    ending = _override("40", TODAY - timedelta(days=3), TODAY)
-    assert compute_price_from([_weekday("90")], [ending], today=TODAY) == Decimal("40")
+def test_price_from_none_when_horizon_zero():
+    assert compute_price_from([_price("50", 0)], today=TODAY, horizon_days=0) is None
 
 
 # ---------------------------------------------------------------------------
@@ -92,43 +85,31 @@ def test_price_from_includes_override_ending_today():
 
 
 def test_valid_false_without_pricing():
-    assert has_valid_pricing([], [], today=TODAY, horizon_days=HORIZON) is False
+    assert has_valid_pricing([], today=TODAY, horizon_days=HORIZON) is False
 
 
-def test_valid_true_with_any_weekday_rule():
-    # Weekday rules recur weekly, so they always cover a day in the horizon.
-    assert has_valid_pricing([_weekday("50")], [], today=TODAY, horizon_days=HORIZON)
+def test_valid_true_when_night_in_horizon():
+    assert has_valid_pricing([_price("50", 30)], today=TODAY, horizon_days=HORIZON)
 
 
-def test_valid_true_when_override_intersects_horizon():
-    inside = TODAY + timedelta(days=30)
-    assert has_valid_pricing(
-        [], [_override("50", inside, inside)], today=TODAY, horizon_days=HORIZON
-    )
-
-
-def test_valid_false_when_all_overrides_in_past():
-    past = TODAY - timedelta(days=5)
+def test_valid_false_when_all_nights_in_past():
     assert (
-        has_valid_pricing(
-            [], [_override("50", past, past)], today=TODAY, horizon_days=HORIZON
-        )
+        has_valid_pricing([_price("50", -5)], today=TODAY, horizon_days=HORIZON)
         is False
     )
 
 
-def test_valid_false_when_override_beyond_horizon():
-    beyond = TODAY + timedelta(days=HORIZON + 10)
+def test_valid_false_when_night_beyond_horizon():
     assert (
         has_valid_pricing(
-            [], [_override("50", beyond, beyond)], today=TODAY, horizon_days=HORIZON
+            [_price("50", HORIZON + 10)], today=TODAY, horizon_days=HORIZON
         )
         is False
     )
 
 
 def test_valid_false_when_horizon_zero():
-    assert has_valid_pricing([_weekday("50")], [], today=TODAY, horizon_days=0) is False
+    assert has_valid_pricing([_price("50", 0)], today=TODAY, horizon_days=0) is False
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +117,7 @@ def test_valid_false_when_horizon_zero():
 # ---------------------------------------------------------------------------
 
 
-def _run_sync(prop, weekday_rows, override_rows):
+def _run_sync(prop, price_rows):
     with (
         patch(
             "app.models.Property.get_or_none",
@@ -144,12 +125,8 @@ def _run_sync(prop, weekday_rows, override_rows):
             return_value=prop,
         ),
         patch(
-            "app.models.PropertyWeekdayPrice.filter",
-            MagicMock(return_value=_AwaitableList(weekday_rows)),
-        ),
-        patch(
-            "app.models.PropertyDatePriceOverride.filter",
-            MagicMock(return_value=_AwaitableList(override_rows)),
+            "app.models.PropertyDatePrice.filter",
+            MagicMock(return_value=_AwaitableList(price_rows)),
         ),
     ):
         asyncio.run(sync_pricing_cache(uuid4(), today=TODAY))
@@ -160,7 +137,7 @@ def test_sync_persists_both_fields_when_changed():
     prop.price_from = Decimal("999.00")
     prop.has_valid_pricing = False
     prop.save = AsyncMock()
-    _run_sync(prop, [_weekday("70")], [])
+    _run_sync(prop, [_price("70", 5)])
     assert prop.price_from == Decimal("70")
     assert prop.has_valid_pricing is True
     prop.save.assert_awaited_once_with(
@@ -173,7 +150,7 @@ def test_sync_clears_cache_when_pricing_removed():
     prop.price_from = Decimal("70.00")
     prop.has_valid_pricing = True
     prop.save = AsyncMock()
-    _run_sync(prop, [], [])
+    _run_sync(prop, [])
     assert prop.price_from is None
     assert prop.has_valid_pricing is False
     prop.save.assert_awaited_once_with(
@@ -186,7 +163,7 @@ def test_sync_noop_when_unchanged():
     prop.price_from = Decimal("70")
     prop.has_valid_pricing = True
     prop.save = AsyncMock()
-    _run_sync(prop, [_weekday("70")], [])
+    _run_sync(prop, [_price("70", 5)])
     prop.save.assert_not_awaited()
 
 
@@ -194,7 +171,6 @@ def test_sync_ignores_missing_property():
     with patch(
         "app.models.Property.get_or_none", new_callable=AsyncMock, return_value=None
     ):
-        # No weekday/override access should be required when the property is gone.
         asyncio.run(sync_pricing_cache(uuid4(), today=TODAY))
 
 
@@ -211,11 +187,7 @@ def _prop(pid, price_from, valid) -> MagicMock:
     return prop
 
 
-def _weekday_row(pid, price: str) -> SimpleNamespace:
-    return SimpleNamespace(property_id=pid, price=Decimal(price))
-
-
-def _run_recompute(properties, weekday_rows, override_rows) -> tuple[int, list]:
+def _run_recompute(properties, price_rows) -> tuple[int, list]:
     bulk_update = AsyncMock()
     with (
         patch(
@@ -223,12 +195,8 @@ def _run_recompute(properties, weekday_rows, override_rows) -> tuple[int, list]:
             MagicMock(return_value=_AwaitableList(properties)),
         ),
         patch(
-            "app.models.PropertyWeekdayPrice.all",
-            MagicMock(return_value=_AwaitableList(weekday_rows)),
-        ),
-        patch(
-            "app.models.PropertyDatePriceOverride.all",
-            MagicMock(return_value=_AwaitableList(override_rows)),
+            "app.models.PropertyDatePrice.filter",
+            MagicMock(return_value=_AwaitableList(price_rows)),
         ),
         patch("app.models.Property.bulk_update", bulk_update),
     ):
@@ -237,11 +205,11 @@ def _run_recompute(properties, weekday_rows, override_rows) -> tuple[int, list]:
 
 
 def test_recompute_bulk_updates_only_changed_properties():
-    p1 = uuid4()  # needs update: no cache set yet, has a weekday rule
+    p1 = uuid4()  # needs update: no cache set yet, has a priced night
     p2 = uuid4()  # already correct: skipped
     props = [_prop(p1, None, False), _prop(p2, Decimal("50"), True)]
-    weekdays = [_weekday_row(p1, "80"), _weekday_row(p2, "50")]
-    count, calls = _run_recompute(props, weekdays, [])
+    rows = [_price("80", 5, pid=p1), _price("50", 5, pid=p2)]
+    count, calls = _run_recompute(props, rows)
 
     assert count == 2
     assert len(calls) == 1
@@ -253,6 +221,6 @@ def test_recompute_bulk_updates_only_changed_properties():
 
 
 def test_recompute_no_properties_skips_bulk_update():
-    count, calls = _run_recompute([], [], [])
+    count, calls = _run_recompute([], [])
     assert count == 0
     assert calls == []

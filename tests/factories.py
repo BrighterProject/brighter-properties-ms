@@ -209,8 +209,7 @@ def property_response(**overrides) -> dict:
         translations=[translation_response("bg")],
         images=[],
         unavailabilities=[],
-        weekday_prices=[],
-        date_price_overrides=[],
+        date_prices=[],
     )
     return {**base, **overrides}
 

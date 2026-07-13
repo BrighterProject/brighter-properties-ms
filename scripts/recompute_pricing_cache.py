@@ -1,10 +1,10 @@
 """Recompute the pricing cache (price_from + has_valid_pricing) for all properties.
 
-The cache is normally refreshed on every pricing-calendar write, but
-``has_valid_pricing`` depends on a rolling horizon from *today*, so a property
-priced only via date overrides can drift out of the horizon purely with the
-passage of time (no write to trigger a refresh). Run this nightly (e.g. a
-Kubernetes CronJob) to keep the cache correct.
+The cache is normally refreshed on every pricing-calendar write, but both
+``price_from`` and ``has_valid_pricing`` depend on a rolling horizon from
+*today*, so a property's priced nights can drift out of (or into) the horizon
+purely with the passage of time (no write to trigger a refresh). Run this
+nightly (e.g. a Kubernetes CronJob) to keep the cache correct.
 
 Usage:
     DB_URL=asyncpg://user:pass@host:5432/brighter uv run python \

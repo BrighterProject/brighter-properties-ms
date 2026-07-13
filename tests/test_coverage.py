@@ -2,29 +2,28 @@
 
 import asyncio
 from datetime import date, timedelta
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from app.services.coverage import compute_unpriced_windows, unpriced_windows
 
-MONDAY = date(2026, 7, 6)  # a Monday, keeps weekday math obvious
+MONDAY = date(2026, 7, 6)
 
 
-def _weekdays(days: list[int]) -> list[SimpleNamespace]:
-    return [SimpleNamespace(weekday=w) for w in days]
+def _prices(days: list[int]) -> list[SimpleNamespace]:
+    """Build per-date rows for the given day-offsets from MONDAY."""
+    return [
+        SimpleNamespace(date=MONDAY + timedelta(days=d), price=Decimal("50.00"))
+        for d in days
+    ]
 
 
-def _overrides(ranges: list[tuple[date, date]]) -> list[SimpleNamespace]:
-    return [SimpleNamespace(start_date=s, end_date=e) for s, e in ranges]
-
-
-def _windows(weekdays, overrides, *, days: int):
+def _windows(priced_offsets: list[int], *, days: int):
     start = MONDAY
     end = MONDAY + timedelta(days=days)
-    result = compute_unpriced_windows(
-        _weekdays(weekdays), _overrides(overrides), start=start, end=end
-    )
+    result = compute_unpriced_windows(_prices(priced_offsets), start=start, end=end)
     return [(w.start_date, w.end_date) for w in result]
 
 
@@ -34,17 +33,16 @@ def _windows(weekdays, overrides, *, days: int):
 
 
 def test_no_prices_blocks_entire_range():
-    assert _windows([], [], days=7) == [(MONDAY, MONDAY + timedelta(days=7))]
+    assert _windows([], days=7) == [(MONDAY, MONDAY + timedelta(days=7))]
 
 
-def test_all_weekdays_priced_leaves_no_gaps():
-    assert _windows(list(range(7)), [], days=7) == []
+def test_all_days_priced_leaves_no_gaps():
+    assert _windows(list(range(7)), days=7) == []
 
 
-def test_override_range_splits_gaps():
-    # Override covers Wed–Fri (today+2 .. today+4 inclusive); no weekday prices.
-    override = (MONDAY + timedelta(days=2), MONDAY + timedelta(days=4))
-    assert _windows([], [override], days=7) == [
+def test_priced_run_splits_gaps():
+    # Only Wed–Fri (offsets 2..4) priced; Mon–Tue and Sat–Sun unpriced.
+    assert _windows([2, 3, 4], days=7) == [
         (MONDAY, MONDAY + timedelta(days=2)),  # Mon–Tue unpriced
         (MONDAY + timedelta(days=5), MONDAY + timedelta(days=7)),  # Sat–Sun unpriced
     ]
@@ -52,17 +50,15 @@ def test_override_range_splits_gaps():
 
 def test_end_exclusive():
     # Single day range -> one window covering exactly that day.
-    result = compute_unpriced_windows(
-        [], [], start=MONDAY, end=MONDAY + timedelta(days=1)
-    )
+    result = compute_unpriced_windows([], start=MONDAY, end=MONDAY + timedelta(days=1))
     assert [(w.start_date, w.end_date) for w in result] == [
         (MONDAY, MONDAY + timedelta(days=1))
     ]
 
 
-def test_weekday_gap_between_two_priced_runs():
-    # Price Mon(0) and Wed(2); Tue(1) is unpriced in the middle.
-    assert _windows([0, 2], [], days=3) == [
+def test_gap_between_two_priced_runs():
+    # Price offsets 0 and 2; offset 1 is unpriced in the middle.
+    assert _windows([0, 2], days=3) == [
         (MONDAY + timedelta(days=1), MONDAY + timedelta(days=2))
     ]
 
@@ -84,15 +80,9 @@ class _AwaitableList:
 
 
 def test_unpriced_windows_loads_and_computes():
-    with (
-        patch(
-            "app.models.PropertyWeekdayPrice.filter",
-            MagicMock(return_value=_AwaitableList([])),
-        ),
-        patch(
-            "app.models.PropertyDatePriceOverride.filter",
-            MagicMock(return_value=_AwaitableList([])),
-        ),
+    with patch(
+        "app.models.PropertyDatePrice.filter",
+        MagicMock(return_value=_AwaitableList([])),
     ):
         result = asyncio.run(
             unpriced_windows(
