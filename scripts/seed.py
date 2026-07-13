@@ -8,6 +8,7 @@ Usage:
 """
 
 import asyncio
+import os
 import sys
 import uuid
 from decimal import Decimal
@@ -17,14 +18,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tortoise import Tortoise
 
-DB_URL = __import__("os").environ.get(
+DB_URL = os.environ.get(
     "DB_URL", "asyncpg://brighter:brighter@localhost:5432/brighter"
 )
 
 MODELS = ["app.models"]
 
-# Fixed seed owner UUID — a placeholder owner for fixture properties.
-SEED_OWNER_ID = uuid.UUID("b42ebeec-727b-47a1-aec9-93e214ecf837")
+# Seed owner UUID — defaults to a placeholder, but the compose-wide
+# `seed_all.sh` orchestrator overrides this to the dev_owner_sub UUID from
+# brighter-users-ms/scripts/seed.py so seeded properties belong to a real,
+# subscribed dev user instead of a floating unrelated owner.
+SEED_OWNER_ID = uuid.UUID(
+    os.environ.get("SEED_OWNER_ID", "b42ebeec-727b-47a1-aec9-93e214ecf837")
+)
 
 # Tourism registry number prefixes per property type (real ones are issued by
 # the Bulgarian tourism registry; these are seed-only placeholders).
@@ -809,10 +815,10 @@ async def seed(force: bool = False) -> None:
     from app.services.pricing_cache import sync_pricing_cache
     from app.settings import booking_window_days
 
-    existing = await Property.filter(status="active").count()
+    existing = await Property.filter(status="active", owner_id=SEED_OWNER_ID).count()
     if existing > 0 and not force:
         print(
-            f"[seed] {existing} active properties already exist"
+            f"[seed] {existing} active properties already exist for owner {SEED_OWNER_ID}"
             " — skipping (use --force to override)"
         )
         return
