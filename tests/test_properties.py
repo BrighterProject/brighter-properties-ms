@@ -82,6 +82,39 @@ class TestListProperties:
         assert call_filters.available_to == date(2026, 7, 5)
 
 
+class TestSearchProperties:
+    def test_owner_scoped_to_own_id_regardless_of_input(self, client_factory):
+        owner = make_user()
+        with patch("app.routers.property.property_crud") as mock_crud:
+            mock_crud.list_properties = AsyncMock(return_value=([], 0))
+            resp = client_factory(owner).post(
+                "/properties/search", params={"owner_id": str(uuid4())}
+            )
+        assert resp.status_code == 200
+        call_args = mock_crud.list_properties.call_args
+        assert str(call_args[0][0].owner_id) == str(owner.id)
+        assert call_args[1]["admin_view"] is False
+
+    def test_admin_sees_everything_without_owner_filter(self, client_factory):
+        with patch("app.routers.property.property_crud") as mock_crud:
+            mock_crud.list_properties = AsyncMock(
+                return_value=([property_list_item()], 1)
+            )
+            resp = client_factory(make_admin()).post("/properties/search")
+        assert resp.status_code == 200
+        call_args = mock_crud.list_properties.call_args
+        assert call_args[0][0].owner_id is None
+        assert call_args[1]["admin_view"] is True
+
+    def test_admin_scope_alone_is_recognized(self, client_factory):
+        admin = make_user(scopes=[PropertyScope.ADMIN_READ])
+        with patch("app.routers.property.property_crud") as mock_crud:
+            mock_crud.list_properties = AsyncMock(return_value=([], 0))
+            resp = client_factory(admin).post("/properties/search")
+        assert resp.status_code == 200
+        assert mock_crud.list_properties.call_args[1]["admin_view"] is True
+
+
 class TestGetProperty:
     def test_existing_property_returns_200(self, client_factory):
         with patch("app.routers.property.property_crud") as mock_crud:
