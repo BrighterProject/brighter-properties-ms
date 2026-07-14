@@ -30,22 +30,79 @@ class CancellationPolicy(StrEnum):
 
 
 class AmenityType(StrEnum):
+    """Flat amenity taxonomy (BTR-53).
+
+    The enum only validates values; category grouping for the filter UI lives
+    in the frontends. Values are additive — never rename or remove an existing
+    one, since amenities are stored as a JSON list on ``Property``.
+    """
+
+    # Views & location
+    SEA_VIEW = "sea_view"
+    MOUNTAIN_VIEW = "mountain_view"
+    LAKE_VIEW = "lake_view"
+    BEACHFRONT = "beachfront"
+    SKI_TO_DOOR = "ski_to_door"
+    CITY_CENTER = "city_center"
+
+    # Kitchen & dining
+    KITCHEN = "kitchen"
+    KITCHENETTE = "kitchenette"
+    COFFEE_MACHINE = "coffee_machine"
+    DISHWASHER = "dishwasher"
+    MICROWAVE = "microwave"
+    OVEN = "oven"
+    RESTAURANT = "restaurant"
+
+    # Comfort
     WIFI = "wifi"
     AIR_CONDITIONING = "air_conditioning"
-    KITCHEN = "kitchen"
-    WASHING_MACHINE = "washing_machine"
+    HEATING = "heating"
     FIREPLACE = "fireplace"
-    BBQ = "bbq"
-    MOUNTAIN_VIEW = "mountain_view"
-    SKI_STORAGE = "ski_storage"
-    BREAKFAST_INCLUDED = "breakfast_included"
-    RECEPTION_24H = "reception_24h"
-    SEA_VIEW = "sea_view"
-    BALCONY = "balcony"
+    WASHING_MACHINE = "washing_machine"
+    DRYER = "dryer"
+    IRON = "iron"
+    TV = "tv"
+    WORKSPACE = "workspace"
+
+    # Outdoors
     POOL = "pool"
+    INDOOR_POOL = "indoor_pool"
     GARDEN = "garden"
+    BBQ = "bbq"
+    BALCONY = "balcony"
+    TERRACE = "terrace"
+    HOT_TUB = "hot_tub"
+
+    # Family
     PET_FRIENDLY = "pet_friendly"
-    COFFEE_MACHINE = "coffee_machine"
+    CRIB = "crib"
+    HIGH_CHAIR = "high_chair"
+    PLAYGROUND = "playground"
+    BOARD_GAMES = "board_games"
+
+    # Wellness
+    SAUNA = "sauna"
+    SPA = "spa"
+    GYM = "gym"
+    MASSAGE = "massage"
+
+    # Services
+    RECEPTION_24H = "reception_24h"
+    BREAKFAST_INCLUDED = "breakfast_included"
+    AIRPORT_SHUTTLE = "airport_shuttle"
+    EV_CHARGER = "ev_charger"
+    LUGGAGE_STORAGE = "luggage_storage"
+    DAILY_HOUSEKEEPING = "daily_housekeeping"
+    SKI_STORAGE = "ski_storage"
+
+    # Safety & accessibility
+    SMOKE_ALARM = "smoke_alarm"
+    FIRE_EXTINGUISHER = "fire_extinguisher"
+    FIRST_AID_KIT = "first_aid_kit"
+    ELEVATOR = "elevator"
+    GROUND_FLOOR = "ground_floor"
+    STEP_FREE_ACCESS = "step_free_access"
 
 
 SUPPORTED_LOCALES = ("en", "bg", "ru")
@@ -79,12 +136,21 @@ class Property(Model):
     settlement_ekatte = fields.CharField(
         max_length=10, null=True
     )  # EKATTE code e.g. "68134"
-    city = fields.CharField(max_length=100, null=True)  # legacy; kept for old data
+    # DEPRECATED as input: never set on new properties (located via
+    # settlement_ekatte). Kept only as a fallback for pre-EKATTE rows. Read
+    # schemas expose ``city`` as the settlement name resolved from
+    # settlement_ekatte (see crud.py), falling back to this column.
+    city = fields.CharField(max_length=100, null=True)
     latitude = fields.DecimalField(max_digits=9, decimal_places=6, null=True)
     longitude = fields.DecimalField(max_digits=9, decimal_places=6, null=True)
 
-    # Price
-    price_per_night = fields.DecimalField(max_digits=8, decimal_places=2)
+    # Price — system-owned projection of the pricing calendar, never owner input.
+    # Maintained by app.services.pricing_cache on every pricing-calendar change.
+    # price_from: cheapest configured nightly rate (None until pricing is set).
+    # has_valid_pricing: >=1 priced day within the booking horizon; gates public
+    # listing visibility.
+    price_from = fields.DecimalField(max_digits=8, decimal_places=2, null=True)
+    has_valid_pricing = fields.BooleanField(default=False)
     currency = fields.CharField(max_length=3, default="EUR")
 
     # Accommodation details
@@ -134,10 +200,9 @@ class Property(Model):
     images: fields.ReverseRelation["PropertyImage"]
     unavailabilities: fields.ReverseRelation["PropertyUnavailability"]
     translations: fields.ReverseRelation["PropertyTranslation"]
-    weekday_prices: fields.ReverseRelation["PropertyWeekdayPrice"]
-    date_price_overrides: fields.ReverseRelation["PropertyDatePriceOverride"]
+    date_prices: fields.ReverseRelation["PropertyDatePrice"]
 
-    class Meta:  # type: ignore
+    class Meta:
         table = "properties"
         ordering = ["-created_at"]
 
@@ -161,7 +226,7 @@ class PropertyTranslation(Model):
     house_rules = fields.TextField(null=True)
     search_vector = PatchedTSVectorField(null=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         table = "property_translations"
         unique_together = (("property", "locale"),)
         ordering = ["locale"]
@@ -176,7 +241,7 @@ class PropertyImage(Model):
     is_thumbnail = fields.BooleanField(default=False)
     order = fields.IntField(default=0)
 
-    class Meta:  # type: ignore
+    class Meta:
         table = "property_images"
         ordering = ["order"]
 
@@ -192,42 +257,28 @@ class PropertyUnavailability(Model):
     end_date = fields.DateField()
     reason = fields.CharField(max_length=255, null=True)
 
-    class Meta:  # type: ignore
+    class Meta:
         table = "property_unavailabilities"
 
 
-class PropertyWeekdayPrice(Model):
-    """Per-weekday price override. 0=Monday, 6=Sunday (ISO weekday)."""
+class PropertyDatePrice(Model):
+    """One priced night. The calendar is the sole source of price and availability.
+
+    A date with a row is bookable at ``price``; a date with no row is unpriced and
+    therefore unavailable. There are no recurring weekday defaults and no
+    base-price fallback.
+    """
 
     id = fields.UUIDField(primary_key=True)
     property = fields.ForeignKeyField(
-        "models.Property", related_name="weekday_prices", on_delete=fields.CASCADE
+        "models.Property", related_name="date_prices", on_delete=fields.CASCADE
     )
-    weekday = fields.IntField()  # 0–6
+    date = fields.DateField()
     price = fields.DecimalField(max_digits=8, decimal_places=2)
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
 
-    class Meta:  # type: ignore
-        table = "property_weekday_prices"
-        unique_together = (("property", "weekday"),)
-        ordering = ["weekday"]
-
-
-class PropertyDatePriceOverride(Model):
-    """Holiday/special-date price override for a date range (inclusive on both ends)."""
-
-    id = fields.UUIDField(primary_key=True)
-    property = fields.ForeignKeyField(
-        "models.Property", related_name="date_price_overrides", on_delete=fields.CASCADE
-    )
-    start_date = fields.DateField()
-    end_date = fields.DateField()
-    price = fields.DecimalField(max_digits=8, decimal_places=2)
-    label = fields.CharField(max_length=100, null=True)
-    created_at = fields.DatetimeField(auto_now_add=True)
-    updated_at = fields.DatetimeField(auto_now=True)
-
-    class Meta:  # type: ignore
-        table = "property_date_price_overrides"
-        ordering = ["start_date", "created_at"]
+    class Meta:
+        table = "property_date_prices"
+        unique_together = (("property", "date"),)
+        ordering = ["date"]

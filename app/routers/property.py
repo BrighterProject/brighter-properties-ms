@@ -1,5 +1,4 @@
 import asyncio
-from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -13,6 +12,7 @@ from app.deps import (
     can_admin_write,
     can_delete_or_admin,
     can_write_or_admin,
+    get_current_user,
     get_notifications_client,
     get_payments_client,
     get_users_client,
@@ -69,8 +69,10 @@ async def _validate_payment_config(
             detail="Bank transfer payments require a bank account to be configured.",
         )
 
-    if not can_card and not can_bank and (
-        config.deposit_pct != 100 or config.remaining_method is not None
+    if (
+        not can_card
+        and not can_bank
+        and (config.deposit_pct != 100 or config.remaining_method is not None)
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -82,11 +84,6 @@ async def _validate_payment_config(
         )
 
 
-@router.get("/items/")
-async def read_items(filter_query: Annotated[PropertyFilters, Query()]):
-    return filter_query
-
-
 @router.get("/")
 @limiter.limit("60/minute")
 async def list_properties(
@@ -95,7 +92,38 @@ async def list_properties(
     filters: PropertyFilters = Query(),
 ) -> list[PropertyListItem]:
     response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
-    return await property_crud.list_properties(filters, locale=filters.lang)
+    items, total = await property_crud.list_properties(filters, locale=filters.lang)
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["Access-Control-Expose-Headers"] = "X-Total-Count"
+    return items
+
+
+@router.post("/search")
+@limiter.limit("60/minute")
+async def search_properties(
+    request: Request,
+    response: Response,
+    filters: PropertyFilters = Query(),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> list[PropertyListItem]:
+    """Authenticated listing for the admin panel — POST so it hits the
+    jwt-auth-protected router instead of the public GET route.
+
+    Admins (``admin:properties`` or ``admin:properties:read``) see every
+    property regardless of status or pricing. Everyone else is scoped to
+    their own properties, same as the owner-scoped public query.
+    """
+    is_admin = bool(
+        {PropertyScope.ADMIN, PropertyScope.ADMIN_READ} & set(current_user.scopes)
+    )
+    if not is_admin:
+        filters = filters.model_copy(update={"owner_id": current_user.id})
+    items, total = await property_crud.list_properties(
+        filters, locale=filters.lang, admin_view=is_admin
+    )
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["Access-Control-Expose-Headers"] = "X-Total-Count"
+    return items
 
 
 @router.post("/", response_model=PropertyResponse, status_code=status.HTTP_201_CREATED)
@@ -142,8 +170,13 @@ async def get_properties_bulk(
     response_model=PropertyResponse,
 )
 @limiter.limit("60/minute")
-async def get_property(request: Request, property_id: UUID, response: Response):
-    property = await property_crud.get_property(property_id)
+async def get_property(
+    request: Request,
+    property_id: UUID,
+    response: Response,
+    lang: str = Query(DEFAULT_LOCALE, max_length=5),
+):
+    property = await property_crud.get_property(property_id, locale=lang)
     if not property:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Property not found"

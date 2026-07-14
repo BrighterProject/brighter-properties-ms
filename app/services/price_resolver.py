@@ -1,8 +1,9 @@
-"""Pure price resolution logic for pseudo-dynamic pricing.
+"""Pure price resolution logic for per-date pricing.
 
-Priority: date_override > weekday_rule > base_price.
-Overlapping date overrides: last element in the list wins (caller must pass them
-ordered by created_at ascending so the last one is the most recently created).
+A night's price comes solely from its ``PropertyDatePrice`` row. A night with no
+row is "unpriced" (source ``"unpriced"``, price 0) — there is no weekday lookup
+and no base-price fallback. Callers that require a bookable stay must reject any
+result containing an unpriced night.
 """
 
 from __future__ import annotations
@@ -12,103 +13,67 @@ from decimal import Decimal
 from typing import Any, NamedTuple, Protocol
 
 
-class _HasWeekday(Protocol):
-    weekday: int
+class _HasDatePrice(Protocol):
+    date: date
     price: Decimal
-
-
-class _HasDateRange(Protocol):
-    start_date: date
-    end_date: date
-    price: Decimal
-    label: str | None
 
 
 class ResolvedNight(NamedTuple):
     date: date
     price: Decimal
-    source: str  # "base" | "weekday" | "date_override"
+    source: str  # "date" | "unpriced"
     label: str | None
 
 
 def resolve_prices_sync(
     *,
-    base_price: Decimal,
     start_date: date,
     end_date: date,
-    weekday_rules: list[Any],
-    date_overrides: list[Any],
+    date_prices: list[Any],
 ) -> list[ResolvedNight]:
-    """Resolve per-night prices for [start_date, end_date).
+    """Resolve per-night prices for ``[start_date, end_date)``.
 
     ``end_date`` is the checkout day and is excluded from the result.
-    ``date_overrides`` must be ordered by ``created_at`` ascending so that
-    the last matching entry is the most recently created (wins on overlap).
+
+    Nights with a ``PropertyDatePrice`` row are priced (``source="date"``);
+    nights without one are returned with ``source="unpriced"`` and price ``0``.
     """
     num_nights = (end_date - start_date).days
     if num_nights <= 0:
         return []
 
-    by_weekday: dict[int, Decimal] = {r.weekday: r.price for r in weekday_rules}
+    by_date: dict[date, Decimal] = {p.date: p.price for p in date_prices}
 
     results: list[ResolvedNight] = []
     for i in range(num_nights):
         night = start_date + timedelta(days=i)
-
-        matching = [
-            ov for ov in date_overrides if ov.start_date <= night <= ov.end_date
-        ]
-        if matching:
-            best = matching[-1]
-            results.append(
-                ResolvedNight(
-                    date=night,
-                    price=best.price,
-                    source="date_override",
-                    label=best.label,
-                )
-            )
-        elif night.weekday() in by_weekday:
-            results.append(
-                ResolvedNight(
-                    date=night,
-                    price=by_weekday[night.weekday()],
-                    source="weekday",
-                    label=None,
-                )
-            )
+        price = by_date.get(night)
+        if price is not None:
+            results.append(ResolvedNight(night, price, "date", None))
         else:
-            results.append(
-                ResolvedNight(date=night, price=base_price, source="base", label=None)
-            )
+            results.append(ResolvedNight(night, Decimal("0.00"), "unpriced", None))
 
     return results
 
 
 async def resolve_prices_for_property(
     property_id: Any,
-    base_price: Decimal,
     start_date: date,
     end_date: date,
 ) -> list[ResolvedNight]:
-    """Load rules from DB and resolve prices for a property."""
-    from app.models import PropertyDatePriceOverride, PropertyWeekdayPrice
+    """Load per-date rows from DB and resolve prices for a property."""
+    from app.models import PropertyDatePrice
 
-    weekday_rules = await PropertyWeekdayPrice.filter(property_id=property_id).order_by(
-        "weekday"
-    )
-    date_overrides = await PropertyDatePriceOverride.filter(
+    date_prices = await PropertyDatePrice.filter(
         property_id=property_id,
-        start_date__lte=end_date,
-        end_date__gte=start_date,
-    ).order_by("created_at")
+        date__gte=start_date,
+        date__lt=end_date,
+    )
 
     return resolve_prices_sync(
-        base_price=base_price,
         start_date=start_date,
         end_date=end_date,
-        weekday_rules=list(weekday_rules),
-        date_overrides=list(date_overrides),
+        date_prices=list(date_prices),
     )
 
 
@@ -121,56 +86,50 @@ async def compute_stay_totals(
     property_ids: list[Any],
     start_date: date,
     end_date: date,
-    base_prices: dict[Any, Decimal],
 ) -> dict[Any, Decimal]:
     """Compute the stay total for each property over ``[start_date, end_date)``.
 
-    Batch-loads weekday rules and date overrides for all given properties in two
-    queries (no N+1) and resolves each stay independently.
+    Batch-loads the per-date rows for all given properties in one query (no N+1)
+    and resolves each stay independently.
 
     Args:
         property_ids: Properties to price.
         start_date: Check-in date (inclusive).
         end_date: Checkout date (excluded from the nightly sum).
-        base_prices: Per-property fallback price for nights with no rule.
 
     Returns:
-        A ``{property_id: total}`` mapping. Properties with no priced nights
-        still get a total computed from their base price.
+        A ``{property_id: total}`` mapping. Properties whose stay includes an
+        unpriced night are omitted (the stay is not fully priced, so no total
+        can be shown).
     """
     from collections import defaultdict
 
-    from app.models import PropertyDatePriceOverride, PropertyWeekdayPrice
+    from app.models import PropertyDatePrice
 
     if not property_ids or (end_date - start_date).days <= 0:
         return {}
 
     # Tortoise exposes the FK column as ``.property_id`` at runtime; typed as Any
     # so the grouping below type-checks.
-    weekday_rows: list[Any] = await PropertyWeekdayPrice.filter(
-        property_id__in=property_ids
-    )
-    override_rows: list[Any] = await PropertyDatePriceOverride.filter(
+    price_rows: list[Any] = await PropertyDatePrice.filter(
         property_id__in=property_ids,
-        start_date__lte=end_date,
-        end_date__gte=start_date,
-    ).order_by("created_at")
+        date__gte=start_date,
+        date__lt=end_date,
+    )
 
-    weekdays_by_prop: dict[Any, list] = defaultdict(list)
-    for w in weekday_rows:
-        weekdays_by_prop[w.property_id].append(w)
-    overrides_by_prop: dict[Any, list] = defaultdict(list)
-    for o in override_rows:
-        overrides_by_prop[o.property_id].append(o)
+    prices_by_prop: dict[Any, list] = defaultdict(list)
+    for row in price_rows:
+        prices_by_prop[row.property_id].append(row)
 
     totals: dict[Any, Decimal] = {}
     for pid in property_ids:
         nights = resolve_prices_sync(
-            base_price=base_prices.get(pid, Decimal("0")),
             start_date=start_date,
             end_date=end_date,
-            weekday_rules=weekdays_by_prop.get(pid, []),
-            date_overrides=overrides_by_prop.get(pid, []),
+            date_prices=prices_by_prop.get(pid, []),
         )
+        # A stay with any unpriced night is not bookable — omit its total.
+        if any(n.source == "unpriced" for n in nights):
+            continue
         totals[pid] = calculate_total(nights)
     return totals

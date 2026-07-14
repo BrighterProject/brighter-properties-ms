@@ -8,6 +8,7 @@ Usage:
 """
 
 import asyncio
+import os
 import sys
 import uuid
 from decimal import Decimal
@@ -17,17 +18,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tortoise import Tortoise
 
-DB_URL = __import__("os").environ.get(
+DB_URL = os.environ.get(
     "DB_URL", "asyncpg://brighter:brighter@localhost:5432/brighter"
 )
 
 MODELS = ["app.models"]
 
-# Fixed seed owner UUID — a placeholder owner for fixture properties.
-SEED_OWNER_ID = uuid.UUID("b42ebeec-727b-47a1-aec9-93e214ecf837")
+# Seed owner UUID — defaults to a placeholder, but the compose-wide
+# `seed_all.sh` orchestrator overrides this to the dev_owner_sub UUID from
+# brighter-users-ms/scripts/seed.py so seeded properties belong to a real,
+# subscribed dev user instead of a floating unrelated owner.
+SEED_OWNER_ID = uuid.UUID(
+    os.environ.get("SEED_OWNER_ID", "b42ebeec-727b-47a1-aec9-93e214ecf837")
+)
 
-# Shared tourism registry number for all seeded apartments.
-SEED_APARTMENT_REGISTRATION_NUMBER = "АПТ-2024-00123"
+# Tourism registry number prefixes per property type (real ones are issued by
+# the Bulgarian tourism registry; these are seed-only placeholders).
+_REGISTRATION_PREFIXES = {
+    "apartment": "АПТ",
+    "house": "КЪЩ",
+    "villa": "ВИЛ",
+    "hotel": "ХОТ",
+    "hostel": "ХСТ",
+    "guesthouse": "КЗГ",
+    "room": "СТА",
+    "other": "ДРУ",
+}
 
 # Default payment config for seeded properties: cash on arrival, no online deposit.
 SEED_PAYMENT_CONFIG = {
@@ -40,6 +56,8 @@ FIXTURES = [
     {
         "property_type": "apartment",
         "city": "Sofia",
+        "region_code": "SOF",
+        "settlement_ekatte": "68134",
         "latitude": Decimal("42.697708"),
         "longitude": Decimal("23.321868"),
         "price_per_night": Decimal("85.00"),
@@ -108,6 +126,8 @@ FIXTURES = [
     {
         "property_type": "villa",
         "city": "Bansko",
+        "region_code": "BLG",
+        "settlement_ekatte": "02676",
         "latitude": Decimal("41.837303"),
         "longitude": Decimal("23.487750"),
         "price_per_night": Decimal("220.00"),
@@ -182,6 +202,8 @@ FIXTURES = [
     {
         "property_type": "hotel",
         "city": "Plovdiv",
+        "region_code": "PDV",
+        "settlement_ekatte": "56784",
         "latitude": Decimal("42.150350"),
         "longitude": Decimal("24.750450"),
         "price_per_night": Decimal("65.00"),
@@ -244,6 +266,8 @@ FIXTURES = [
     {
         "property_type": "apartment",
         "city": "Varna",
+        "region_code": "VAR",
+        "settlement_ekatte": "10135",
         "latitude": Decimal("43.214103"),
         "longitude": Decimal("27.914733"),
         "price_per_night": Decimal("110.00"),
@@ -319,6 +343,8 @@ FIXTURES = [
     {
         "property_type": "house",
         "city": "Plovdiv",
+        "region_code": "PDV",
+        "settlement_ekatte": "56784",
         "latitude": Decimal("42.148150"),
         "longitude": Decimal("24.744600"),
         "price_per_night": Decimal("130.00"),
@@ -388,6 +414,8 @@ FIXTURES = [
     {
         "property_type": "apartment",
         "city": "Sofia",
+        "region_code": "SOF",
+        "settlement_ekatte": "68134",
         "latitude": Decimal("42.692233"),
         "longitude": Decimal("23.330833"),
         "price_per_night": Decimal("55.00"),
@@ -548,7 +576,12 @@ def _sea_images(pair_index: int) -> list[dict]:
 # (oblast_code, ekatte, bg_address, en_address) — ekatte/oblast verified against
 # processing/final_merged_settlements.json (the same registry app/regions.py reads).
 _SEA_TOWNS = [
-    ("VAR", "10135", "к.к. Св. Св. Константин и Елена", "St. Constantine and Helena Resort"),
+    (
+        "VAR",
+        "10135",
+        "к.к. Св. Св. Константин и Елена",
+        "St. Constantine and Helena Resort",
+    ),
     ("BGS", "07079", "ул. Александровска 45", "45 Alexandrovska St"),
     ("BGS", "67800", "ул. Аполония 12, Стар град", "12 Apolonia St, Old Town"),
     ("BGS", "51500", "ул. Митрополитска 8, Стар град", "8 Mitropolitska St, Old Town"),
@@ -573,13 +606,104 @@ _SEA_TOWNS = [
 # (property_type, bedrooms, bathrooms, max_guests, base_price, cancellation_policy,
 #  has_parking, extra_amenities, doubles, singles, sofa_bed, studio)
 _SEA_ARCHETYPES = [
-    ("apartment", 2, 1, 4, Decimal("95.00"), "moderate", True, ["balcony", "pool"], 2, 0, False, False),
-    ("house", 3, 2, 6, Decimal("140.00"), "moderate", True, ["garden", "bbq"], 2, 2, False, False),
-    ("apartment", 1, 1, 2, Decimal("60.00"), "free", False, ["balcony"], 0, 0, False, True),
-    ("hotel", 1, 1, 2, Decimal("75.00"), "free", True, ["breakfast_included", "reception_24h"], 1, 0, False, False),
-    ("villa", 4, 3, 8, Decimal("260.00"), "strict", True, ["pool", "bbq", "garden"], 3, 2, False, False),
-    ("guesthouse", 2, 1, 5, Decimal("80.00"), "moderate", True, ["breakfast_included"], 1, 1, True, False),
-    ("apartment", 3, 2, 6, Decimal("120.00"), "moderate", True, ["pool", "balcony"], 2, 2, False, False),
+    (
+        "apartment",
+        2,
+        1,
+        4,
+        Decimal("95.00"),
+        "moderate",
+        True,
+        ["balcony", "pool"],
+        2,
+        0,
+        False,
+        False,
+    ),
+    (
+        "house",
+        3,
+        2,
+        6,
+        Decimal("140.00"),
+        "moderate",
+        True,
+        ["garden", "bbq"],
+        2,
+        2,
+        False,
+        False,
+    ),
+    (
+        "apartment",
+        1,
+        1,
+        2,
+        Decimal("60.00"),
+        "free",
+        False,
+        ["balcony"],
+        0,
+        0,
+        False,
+        True,
+    ),
+    (
+        "hotel",
+        1,
+        1,
+        2,
+        Decimal("75.00"),
+        "free",
+        True,
+        ["breakfast_included", "reception_24h"],
+        1,
+        0,
+        False,
+        False,
+    ),
+    (
+        "villa",
+        4,
+        3,
+        8,
+        Decimal("260.00"),
+        "strict",
+        True,
+        ["pool", "bbq", "garden"],
+        3,
+        2,
+        False,
+        False,
+    ),
+    (
+        "guesthouse",
+        2,
+        1,
+        5,
+        Decimal("80.00"),
+        "moderate",
+        True,
+        ["breakfast_included"],
+        1,
+        1,
+        True,
+        False,
+    ),
+    (
+        "apartment",
+        3,
+        2,
+        6,
+        Decimal("120.00"),
+        "moderate",
+        True,
+        ["pool", "balcony"],
+        2,
+        2,
+        False,
+        False,
+    ),
     ("hostel", 1, 1, 2, Decimal("45.00"), "free", False, [], 1, 0, False, True),
 ]
 
@@ -671,21 +795,30 @@ def _make_sea_fixture(index: int) -> dict:
 SEA_FIXTURES = [_make_sea_fixture(i) for i in range(len(_SEA_TOWNS))]
 FIXTURES.extend(SEA_FIXTURES)
 
-for _fixture in FIXTURES:
-    if _fixture["property_type"] == "apartment":
-        _fixture["registration_number"] = SEED_APARTMENT_REGISTRATION_NUMBER
+for _index, _fixture in enumerate(FIXTURES, start=1):
+    _prefix = _REGISTRATION_PREFIXES[_fixture["property_type"]]
+    _fixture["registration_number"] = f"{_prefix}-2024-{_index:05d}"
     _fixture.setdefault("payment_config", dict(SEED_PAYMENT_CONFIG))
 
 
 async def seed(force: bool = False) -> None:
     await Tortoise.init(db_url=DB_URL, modules={"models": MODELS})
 
-    from app.models import Property, PropertyImage, PropertyTranslation
+    from datetime import date, timedelta
 
-    existing = await Property.filter(status="active").count()
+    from app.models import (
+        Property,
+        PropertyDatePrice,
+        PropertyImage,
+        PropertyTranslation,
+    )
+    from app.services.pricing_cache import sync_pricing_cache
+    from app.settings import booking_window_days
+
+    existing = await Property.filter(status="active", owner_id=SEED_OWNER_ID).count()
     if existing > 0 and not force:
         print(
-            f"[seed] {existing} active properties already exist"
+            f"[seed] {existing} active properties already exist for owner {SEED_OWNER_ID}"
             " — skipping (use --force to override)"
         )
         return
@@ -698,6 +831,10 @@ async def seed(force: bool = False) -> None:
     for fixture in FIXTURES:
         translations = fixture.pop("translations")
         images = fixture.pop("images")
+        # Price is no longer a stored field — seed one per-date row per night
+        # across the booking horizon and let the pricing cache derive
+        # price_from / has_valid_pricing.
+        seed_price = fixture.pop("price_per_night")
 
         prop = await Property.create(
             id=uuid.uuid4(),
@@ -712,12 +849,27 @@ async def seed(force: bool = False) -> None:
         for img in images:
             await PropertyImage.create(id=uuid.uuid4(), property=prop, **img)
 
+        today = date.today()
+        await PropertyDatePrice.bulk_create(
+            [
+                PropertyDatePrice(
+                    id=uuid.uuid4(),
+                    property=prop,
+                    date=today + timedelta(days=offset),
+                    price=seed_price,
+                )
+                for offset in range(booking_window_days)
+            ]
+        )
+        await sync_pricing_cache(prop.id)
+
         print(f"[seed] Created: {prop.city} — {translations[0]['name']}")
         created += 1
 
         # Restore so the script can be re-run (list references are consumed otherwise)
         fixture["translations"] = translations
         fixture["images"] = images
+        fixture["price_per_night"] = seed_price
 
     print(f"[seed] Done — {created} properties inserted.")
     await Tortoise.close_connections()

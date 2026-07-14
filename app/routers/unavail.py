@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.crud import assert_owns_property, property_unavailability_crud
 from app.deps import (
@@ -13,7 +13,6 @@ from app.schemas import (
     PropertyUnavailabilityResponse,
     PropertyUnavailabilityUpdate,
 )
-from app.services.availability import price_gap_windows
 
 router = APIRouter(
     prefix="/properties/{property_id}/unavailabilities",
@@ -23,22 +22,13 @@ router = APIRouter(
 
 @router.get("", response_model=list[PropertyUnavailabilityResponse])
 @limiter.limit("60/minute")
-async def list_unavailabilities(
-    request: Request,
-    property_id: UUID,
-    include_price_gaps: bool = Query(
-        default=False,
-        description=(
-            "When true, also return synthetic windows for days that have no "
-            "price set (unpriced day = unavailable). Used by the booking flow; "
-            "owner-facing management should omit it."
-        ),
-    ),
-):
-    unavailabilities = await property_unavailability_crud.list_for_property(property_id)
-    if include_price_gaps:
-        unavailabilities = [*unavailabilities, *await price_gap_windows(property_id)]
-    return unavailabilities
+async def list_unavailabilities(request: Request, property_id: UUID):
+    """Return the property's real owner-set unavailability windows.
+
+    Unpriced days are no longer synthesized here — use
+    ``GET /properties/{id}/pricing/coverage`` for those.
+    """
+    return await property_unavailability_crud.list_for_property(property_id)
 
 
 @router.post(

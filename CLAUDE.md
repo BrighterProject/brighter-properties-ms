@@ -60,21 +60,43 @@ app/
     translations.py    # /properties/{id}/translations
     images.py          # /properties/{id}/images
     unavail.py         # /properties/{id}/unavailabilities
-    pricing.py         # /properties/{id}/pricing — weekday prices, date overrides, price resolve
+    pricing.py         # /properties/{id}/pricing — per-date prices, resolve, coverage
 tests/
   conftest.py          # Fixtures: owner_client, admin_client, anon_app, client_factory
   factories.py         # make_user(), make_admin(), property_create_payload(), etc.
   test_*.py            # One file per router + edge cases + schemas + scopes
 ```
 
-## Pseudo-dynamic pricing
+## Pricing — per-date calendar (no weekday rules, no base price)
 
-Models: `PropertyWeekdayPrice` (0=Mon…6=Sun), `PropertyDatePriceOverride` (date range + optional label).
+Owners price the calendar **day by day**. The calendar is the sole source of
+price and availability: a date with a `PropertyDatePrice` row is bookable at that
+price; a date with no row is unpriced and therefore unavailable. There are no
+recurring weekday defaults and no base-price fallback. `Property.price_per_night`
+was removed (migration `0005`) in favour of two **system-owned** projections,
+never owner input, maintained by `app/services/pricing_cache.py`:
+
+- `price_from` — cheapest **priced night within the `[today, today + BOOKING_WINDOW_DAYS)` horizon** (nullable; the "from X" price). Past/beyond-horizon rows don't count.
+- `has_valid_pricing` — `>=1` priced night within that same horizon; gates public
+  listing visibility (public `GET /properties` hides properties where it is false;
+  owner-scoped `?owner_id=` listings still show unpriced drafts).
+
+`sync_pricing_cache(property_id)` refreshes both on every calendar write.
+`scripts/recompute_pricing_cache.py` (nightly cron) corrects horizon drift as
+priced nights age out of / into the window.
+
+Model: `PropertyDatePrice` (`property_id`, `date`, `price`; unique on `(property, date)`) — migration `0006` dropped `property_weekday_prices` + `property_date_price_overrides` (no back-fill).
 Router: `app/routers/pricing.py` — prefix `/properties/{property_id}/pricing`.
 Auth: public GETs; mutations require `properties:schedule` scope (owner) or `admin:properties:write` (admin).
-Priority: date override › weekday › base price.
-Resolution: `GET /pricing/resolve?start_date=&end_date=` returns per-night breakdown with source field (`base` | `weekday` | `date_override`).
-Tested in `tests/test_pricing_router.py` and `tests/test_price_resolver.py`.
+Editing (both map to per-date rows):
+- `GET /pricing/dates?from_date=&to_date=` — list priced nights.
+- `PUT /pricing/dates` `{start_date, end_date, price}` — upsert every night in the inclusive range to one price (`start_date == end_date` sets a single day). One request per range edit.
+- `DELETE /pricing/dates?start_date=&end_date=` — clear the inclusive range; those nights become unpriced/unavailable.
+Resolution: `GET /pricing/resolve?start_date=&end_date=` returns the per-night breakdown (source `date`), or **409** with `unpriced_dates` when any night is unpriced. Contract unchanged, so bookings-ms needs no change.
+Coverage: `GET /pricing/coverage?start=&end=` returns `unpriced_windows` (`[start_date, end_date)`, end-exclusive) — used by the frontend date picker to disable unbookable days (`app/services/coverage.py`). `GET /properties/{id}/unavailabilities` returns **real owner blocks only**.
+Search: `GET /properties/?available_from=&available_to=` (`PropertyCRUD.list_properties`, `app/crud.py`) excludes properties with an overlapping owner `PropertyUnavailability` row or a confirmed booking, **and** requires every night in the requested range to be priced — it calls `compute_stay_totals()` on the candidate ids before pagination and drops any property omitted from that result (a stay with even one unpriced night, e.g. two disjoint priced ranges that don't fully cover the search, is excluded). There is no synthesized "price-gap" `PropertyUnavailability` row; unpriced-night exclusion happens only via this `compute_stay_totals()` check in search and the 409 in `GET /pricing/resolve` at booking time.
+Filters v2 (BTR-51): `list_properties` returns `(items, total)` and the router surfaces the pre-pagination match count as an `X-Total-Count` header (body stays a bare list). `order_by` accepts `recommended` (default; FTS rank when `q` is set) / `price_asc` / `price_desc` / `rating_desc` — price sorts coalesce NULL `price_from` last. **With a date range**, `min_price`/`max_price` and `price_*` sorts operate on the resolved per-stay *average nightly rate* (`compute_stay_totals` total ÷ nights), not `price_from`; without dates they use `price_from` as before.
+Tested in `tests/test_pricing_router.py`, `tests/test_price_resolver.py`, `tests/test_coverage.py`, `tests/test_pricing_cache.py`, `tests/test_search_pricing_coverage.py`, `tests/test_listing_filters.py`.
 
 ## ms-core
 
@@ -95,8 +117,18 @@ New router files placed in `app/routers/` are picked up automatically by `setup_
 
 **Supported locales**: `en`, `bg`, `ru` (defined in `models.SUPPORTED_LOCALES`)
 
-**AmenityType** enum (stored as JSON list on Property):
-`wifi` | `air_conditioning` | `kitchen` | `washing_machine` | `fireplace` | `bbq` | `mountain_view` | `ski_storage` | `breakfast_included` | `reception_24h` | `sea_view` | `balcony` | `pool` | `garden` | `pet_friendly` | `coffee_machine`
+**AmenityType** enum (stored as JSON list on Property) — flat taxonomy (BTR-53);
+category grouping for the filter UI lives in the frontends, the enum only
+validates values. Additive only: never rename/remove a value (stored JSON).
+Grouped by category:
+- Views & location: `sea_view` | `mountain_view` | `lake_view` | `beachfront` | `ski_to_door` | `city_center`
+- Kitchen & dining: `kitchen` | `kitchenette` | `coffee_machine` | `dishwasher` | `microwave` | `oven` | `restaurant`
+- Comfort: `wifi` | `air_conditioning` | `heating` | `fireplace` | `washing_machine` | `dryer` | `iron` | `tv` | `workspace`
+- Outdoors: `pool` | `indoor_pool` | `garden` | `bbq` | `balcony` | `terrace` | `hot_tub`
+- Family: `pet_friendly` | `crib` | `high_chair` | `playground` | `board_games`
+- Wellness: `sauna` | `spa` | `gym` | `massage`
+- Services: `reception_24h` | `breakfast_included` | `airport_shuttle` | `ev_charger` | `luggage_storage` | `daily_housekeeping` | `ski_storage`
+- Safety & accessibility: `smoke_alarm` | `fire_extinguisher` | `first_aid_kit` | `elevator` | `ground_floor` | `step_free_access`
 
 ## i18n — PropertyTranslation
 
