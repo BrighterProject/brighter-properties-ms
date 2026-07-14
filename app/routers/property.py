@@ -12,6 +12,7 @@ from app.deps import (
     can_admin_write,
     can_delete_or_admin,
     can_write_or_admin,
+    get_current_user,
     get_notifications_client,
     get_payments_client,
     get_users_client,
@@ -92,6 +93,34 @@ async def list_properties(
 ) -> list[PropertyListItem]:
     response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
     items, total = await property_crud.list_properties(filters, locale=filters.lang)
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["Access-Control-Expose-Headers"] = "X-Total-Count"
+    return items
+
+
+@router.post("/search")
+@limiter.limit("60/minute")
+async def search_properties(
+    request: Request,
+    response: Response,
+    filters: PropertyFilters = Query(),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> list[PropertyListItem]:
+    """Authenticated listing for the admin panel — POST so it hits the
+    jwt-auth-protected router instead of the public GET route.
+
+    Admins (``admin:properties`` or ``admin:properties:read``) see every
+    property regardless of status or pricing. Everyone else is scoped to
+    their own properties, same as the owner-scoped public query.
+    """
+    is_admin = bool(
+        {PropertyScope.ADMIN, PropertyScope.ADMIN_READ} & set(current_user.scopes)
+    )
+    if not is_admin:
+        filters = filters.model_copy(update={"owner_id": current_user.id})
+    items, total = await property_crud.list_properties(
+        filters, locale=filters.lang, admin_view=is_admin
+    )
     response.headers["X-Total-Count"] = str(total)
     response.headers["Access-Control-Expose-Headers"] = "X-Total-Count"
     return items

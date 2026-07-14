@@ -490,7 +490,10 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
         return [_build_list_item(v, locale) for v in properties]
 
     async def list_properties(
-        self, filters: PropertyFilters, locale: str = settings.DEFAULT_LOCALE
+        self,
+        filters: PropertyFilters,
+        locale: str = settings.DEFAULT_LOCALE,
+        admin_view: bool = False,
     ) -> tuple[list[PropertyListItem], int]:
         """Return ``(page_items, total)`` where ``total`` is the pre-pagination
         match count (surfaced as ``X-Total-Count`` by the router)."""
@@ -564,9 +567,11 @@ class PropertyCRUD(CRUD[Property, PropertyResponse]):  # type: ignore
             # Owner-scoped listing (admin panel) shows the owner's own drafts,
             # including ones without pricing yet.
             qs = qs.filter(owner_id=filters.owner_id)
-        else:
+        elif not admin_view:
             # Public browse: hide properties with no bookable (priced) days.
             qs = qs.filter(has_valid_pricing=True)
+        # admin_view with no owner_id: authenticated admin sees every property
+        # regardless of status or pricing — no filter applied.
 
         if has_dates:
             return await self._list_with_dates(qs, filters, locale, rank_map)
